@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- 404 Error Screen (Fake) -->
+    <div id="errorScreen" class="error-screen">
+        <div class="error-content">
+            <h1>404</h1>
+            <h2>Page Not Found</h2>
+            <p>The page you are looking for doesn't exist or has been moved.</p>
+        </div>
+    </div>
+
+    <!-- Real App Container (Hidden by default) -->
+    <div id="appContainer" style="display: none;">
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loader"></div>
+        </div>
+
+        <!-- Login Screen -->
+        <div id="loginScreen" class="screen active">
+            <div class="login-container">
+                <div class="login-box">
+                    <div class="logo">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h1>Strona 0</h1>
+                    <p class="subtitle">Bezpieczny dostęp do Twoich danych</p>
+                    
+                    <div class="google-btn-wrapper">
+                        <div id="googleLoginBtn" class="google-btn-container"></div>
+                    </div>
+                    
+                    <div class="login-footer">
+                        <p class="security-info">
+                            <i class="fas fa-lock"></i>
+                            Zabezpieczone połączenie
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Password Screen -->
+        <div id="passwordScreen" class="screen">
+            <div class="password-container">
+                <div class="password-box">
+                    <div class="back-btn" onclick="location.reload()">
+                        <i class="fas fa-arrow-left"></i>
+                    </div>
+                    
+                    <div class="user-info">
+                        <img id="userAvatar" src="" alt="Avatar" class="user-avatar">
+                        <h2 id="userName"></h2>
+                    </div>
+                    
+                    <h3 id="passwordTitle">Wprowadź hasło</h3>
+                    
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <div class="input-wrapper">
+                                <i class="fas fa-lock input-icon"></i>
+                                <input type="password" id="passwordInput" class="form-input" 
+                                       placeholder="Hasło" required>
+                                <button type="button" class="toggle-password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="passwordConfirmGroup" class="form-group" style="display: none;">
+                            <div class="input-wrapper">
+                                <i class="fas fa-lock input-icon"></i>
+                                <input type="password" id="passwordConfirm" class="form-input" 
+                                       placeholder="Potwierdź hasło">
+                                <button type="button" class="toggle-password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="passwordStrength" class="password-strength" style="display: none;">
+                            <div class="strength-bar">
+                                <div class="strength-fill"></div>
+                            </div>
+                            <span class="strength-text">Siła hasła</span>
+                        </div>
+                        
+                        <div id="passwordError" class="error-message"></div>
+                        
+                        <button type="submit" class="submit-btn">
+                            <span>Kontynuuj</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </form>
+                    
+                    <div id="lockoutMessage" class="lockout-message" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Konto tymczasowo zablokowane</h3>
+                        <p>Ze względów bezpieczeństwa konto zostało zablokowane na 5 godzin.</p>
+                        <div class="lockout-timer">
+                            <span>Pozostało:</span>
+                            <span id="lockoutTime" class="time">00:00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PIN Screen -->
+        <div id="pinScreen" class="screen">
+            <div class="pin-container">
+                <div class="pin-box">
+                    <div class="back-btn" onclick="goBack()">
+                        <i class="fas fa-arrow-left"></i>
+                    </div>
+                    
+                    <div class="pin-icon">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    
+                    <h3 id="pinTitle">Wprowadź PIN</h3>
+                    <p class="pin-subtitle">4-cyfrowy kod zabezpieczający</p>
+                    
+                    <form id="pinForm">
+                        <div class="pin-inputs">
+                            <input type="text" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            <input type="text" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            <input type="text" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            <input type="text" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        </div>
+                        
+                        <div id="pinConfirmContainer" style="display: none;">
+                            <p class="pin-subtitle mt-3">Potwierdź PIN</p>
+                            <div class="pin-inputs">
+                                <input type="text" class="pin-digit-confirm" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                                <input type="text" class="pin-digit-confirm" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                                <input type="text" class="pin-digit-confirm" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                                <input type="text" class="pin-digit-confirm" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            </div>
+                        </div>
+                        
+                        <div id="pinError" class="error-message"></div>
+                        
+                        <button type="submit" class="submit-btn">
+                            <span>Kontynuuj</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rule Screen -->
+        <div id="ruleScreen" class="screen">
+            <div class="rule-container">
+                <div class="rule-box">
+                    <div class="back-btn" onclick="goBack()">
+                        <i class="fas fa-arrow-left"></i>
+                    </div>
+                    
+                    <div class="rule-icon">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                    
+                    <h3 id="ruleTitle">Wprowadź regułę bezpieczeństwa</h3>
+                    <p class="rule-subtitle">2-znakowy kod: cyfra + litera</p>
+                    
+                    <form id="ruleForm">
+                        <div class="rule-inputs">
+                            <input type="text" id="ruleDigit" class="rule-input" maxlength="1" 
+                                   pattern="[0-9]" inputmode="numeric" placeholder="0">
+                            <span class="rule-separator">+</span>
+                            <input type="text" id="ruleLetter" class="rule-input" maxlength="1" 
+                                   pattern="[A-Za-z]" placeholder="A">
+                        </div>
+                        
+                        <div id="ruleConfirmContainer" style="display: none;">
+                            <p class="rule-subtitle mt-3">Potwierdź regułę</p>
+                            <div class="rule-inputs">
+                                <input type="text" id="ruleDigitConfirm" class="rule-input" maxlength="1" 
+                                       pattern="[0-9]" inputmode="numeric" placeholder="0">
+                                <span class="rule-separator">+</span>
+                                <input type="text" id="ruleLetterConfirm" class="rule-input" maxlength="1" 
+                                       pattern="[A-Za-z]" placeholder="A">
+                            </div>
+                        </div>
+                        
+                        <div id="ruleError" class="error-message"></div>
+                        
+                        <button type="submit" class="submit-btn">
+                            <span>Zakończ konfigurację</span>
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Panel -->
+        <div id="mainPanel" class="screen">
+            <div class="main-container">
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <div class="app-title">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Strona 0</span>
+                        </div>
+                    </div>
+                    
+                    <nav class="sidebar-nav">
+                        <a href="#" class="nav-item active" data-section="home">
+                            <i class="fas fa-home"></i>
+                            <span>Strona główna</span>
+                        </a>
+                        <a href="#" class="nav-item" data-section="notepad">
+                            <i class="fas fa-sticky-note"></i>
+                            <span>Notatnik</span>
+                            <span class="badge">Bezpieczny</span>
+                        </a>
+                    </nav>
+                    
+                    <div class="sidebar-footer">
+                        <div class="user-menu">
+                            <img id="sidebarAvatar" src="" alt="Avatar" class="user-avatar-small">
+                            <span id="sidebarUserName"></span>
+                        </div>
+                        <button id="logoutBtn" class="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </aside>
+                
+                <!-- Content -->
+                <main class="content">
+                    <!-- Back Navigation -->
+                    <div class="content-nav" id="contentNav" style="display: none;">
+                        <button class="back-nav-btn" onclick="backToHome()">
+                            <i class="fas fa-arrow-left"></i>
+                            <span>Powrót</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Home Content -->
+                    <div id="homeContent">
+                        <div class="content-header">
+                            <h1>Witaj ponownie!</h1>
+                            <p>Twoje dane są bezpieczne</p>
+                        </div>
+                        
+                        <div class="welcome-content">
+                            <div class="info-card">
+                                <i class="fas fa-shield-alt"></i>
+                                <h3>Potrójne zabezpieczenie</h3>
+                                <p>Hasło + PIN + Reguła</p>
+                            </div>
+                            <div class="info-card">
+                                <i class="fas fa-lock"></i>
+                                <h3>Szyfrowanie</h3>
+                                <p>Dane zaszyfrowane end-to-end</p>
+                            </div>
+                            <div class="info-card">
+                                <i class="fas fa-user-shield"></i>
+                                <h3>Prywatność</h3>
+                                <p>Tylko Ty masz dostęp</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Notepad Section -->
+                    <div id="notepadSection" style="display: none;">
+                        <div class="notepad-container">
+                            <div class="notes-sidebar">
+                                <div class="notes-header">
+                                    <h3>Notatki</h3>
+                                    <button class="new-note-btn" onclick="createNewNote()">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="searchInput" placeholder="Szukaj notatek...">
+                                </div>
+                                
+                                <div class="filter-buttons">
+                                    <button class="filter-btn active" data-filter="all">Wszystkie</button>
+                                    <button class="filter-btn" data-filter="starred">Oznaczone</button>
+                                    <button class="filter-btn" data-filter="recent">Ostatnie</button>
+                                </div>
+                                
+                                <div id="notesList" class="notes-list"></div>
+                            </div>
+                            
+                            <div class="note-editor">
+                                <div class="editor-header">
+                                    <input type="text" id="noteTitle" class="note-title-input" placeholder="Tytuł notatki">
+                                    <div class="editor-actions">
+                                        <button class="editor-btn star-btn" onclick="toggleStar()">
+                                            <i class="far fa-star"></i>
+                                        </button>
+                                        <button class="editor-btn save-btn" onclick="saveNote()">
+                                            <i class="fas fa-save"></i>
+                                        </button>
+                                        <button class="editor-btn" onclick="deleteNote()">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="editor-toolbar">
+                                    <button class="toolbar-btn" onclick="formatText('bold')">
+                                        <i class="fas fa-bold"></i>
+                                    </button>
+                                    <button class="toolbar-btn" onclick="formatText('italic')">
+                                        <i class="fas fa-italic"></i>
+                                    </button>
+                                    <button class="toolbar-btn" onclick="formatText('underline')">
+                                        <i class="fas fa-underline"></i>
+                                    </button>
+                                    <div class="toolbar-separator"></div>
+                                    <button class="toolbar-btn" onclick="insertList('ul')">
+                                        <i class="fas fa-list-ul"></i>
+                                    </button>
+                                    <button class="toolbar-btn" onclick="insertList('ol')">
+                                        <i class="fas fa-list-ol"></i>
+                                    </button>
+                                    <div class="toolbar-separator"></div>
+                                    <button class="toolbar-btn" onclick="changeColor()">
+                                        <i class="fas fa-palette"></i>
+                                    </button>
+                                    <button class="toolbar-btn" onclick="insertLink()">
+                                        <i class="fas fa-link"></i>
+                                    </button>
+                                </div>
+                                
+                                <div id="noteContent" class="note-content" contenteditable="true"></div>
+                                
+                                <div class="editor-footer">
+                                    <span id="charCount">0 znaków</span>
+                                    <span id="lastSaved"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- Access Modal -->
+        <div id="pinModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Dostęp do notatnika</h3>
+                    <button class="modal-close" onclick="closePinModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="accessForm">
+                    <div class="access-info">
+                        <i class="fas fa-info-circle"></i>
+                        <p>Wprowadź kod dostępu: @[PIN][REGUŁA]</p>
+                        <small>Przykład: @1234A5</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="text" id="accessCode" class="form-input" 
+                               placeholder="@____" maxlength="7" required>
+                    </div>
+                    
+                    <div id="accessError" class="error-message"></div>
+                    
+                    <button type="submit" class="submit-btn">
+                        <span>Uzyskaj dostęp</span>
+                        <i class="fas fa-unlock"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="script.js"></script>
+</body>
+</html>
