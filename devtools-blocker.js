@@ -9,11 +9,11 @@ document.addEventListener('contextmenu', (e) => {
     return false;
 });
 
-// 3. Disable keyboard shortcuts (MODIFIED - excludes Ctrl+Shift+Z)
+// 2. Disable keyboard shortcuts BUT allow Ctrl+Shift+Z
 document.addEventListener('keydown', (e) => {
-    // IMPORTANT: Allow Ctrl+Shift+Z to pass through
-    if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
-        return; // Let this combination work
+    // IMPORTANT: Skip Ctrl+Shift+Z - let it be handled by main app
+    if (e.ctrlKey && e.shiftKey && (e.key === 'Z' || e.key === 'z')) {
+        return; // Don't block this combination
     }
     
     // F12 - Developer Tools
@@ -46,7 +46,7 @@ document.addEventListener('keydown', (e) => {
         return false;
     }
     
-    // F11 - Fullscreen (can be used to access DevTools)
+    // F11 - Fullscreen
     if (e.key === 'F11') {
         e.preventDefault();
         return false;
@@ -58,15 +58,14 @@ document.addEventListener('keydown', (e) => {
         return false;
     }
     
-    // Ctrl+A - Select All (optional)
+    // Ctrl+A - Select All
     if (e.ctrlKey && e.key === 'a') {
         e.preventDefault();
         return false;
     }
-});
+}, false);
 
-// Reszta kodu pozostaje bez zmian...
-// 4. Detect DevTools by window size
+// 3. Detect DevTools by window size
 let devtools = {open: false, orientation: null};
 const threshold = 160;
 const emitEvent = (state, orientation) => {
@@ -111,13 +110,21 @@ setInterval(() => {
     }
 }, 500);
 
-// 5. Disable console methods
+// 4. Disable console methods
 const disableConsole = () => {
     const methods = ['log', 'debug', 'info', 'warn', 'error', 'table', 'trace', 'dir'];
     
     methods.forEach(method => {
         const original = console[method];
         console[method] = function() {
+            // Allow specific app logs
+            if (method === 'log' && arguments[0] && 
+                (arguments[0].includes('Strona 0') || 
+                 arguments[0].includes('Script loaded') ||
+                 arguments[0].includes('Activated'))) {
+                original.apply(console, arguments);
+            }
+            
             // Clear console immediately
             setTimeout(console.clear, 0);
         };
@@ -127,7 +134,7 @@ const disableConsole = () => {
 // Apply console blocking
 disableConsole();
 
-// 6. Detect DevTools using debugger
+// 5. Detect DevTools using debugger
 let checkStatus;
 
 const element = new Image();
@@ -149,14 +156,14 @@ setInterval(() => {
     console.clear();
 }, 1000);
 
-// 7. Disable print
+// 6. Disable print
 window.addEventListener('beforeprint', (e) => {
     e.preventDefault();
     e.stopPropagation();
     return false;
 });
 
-// 8. Additional protection - detect console.log timing
+// 7. Additional protection - detect console.log timing
 let before = Date.now();
 let after;
 setInterval(() => {
@@ -176,18 +183,24 @@ setInterval(() => {
     }
 }, 1000);
 
-// 9. Listen for devtools state changes
+// 8. Listen for devtools state changes
 window.addEventListener('devtoolschange', (e) => {
     console.log('DevTools are ' + (e.detail.open ? 'open' : 'closed'));
 });
 
-// 10. Disable drag and drop (prevents dragging elements to console)
+// 9. Disable drag and drop
 document.addEventListener('dragstart', (e) => {
     e.preventDefault();
     return false;
 });
 
-// 12. Self-defending code
+// 10. Additional Electron-specific protections
+if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
+    // In Electron environment
+    console.log('Running in Electron');
+}
+
+// 11. Self-defending code
 (function() {
     'use strict';
     
@@ -203,7 +216,15 @@ document.addEventListener('dragstart', (e) => {
     setTimeout(protection, 0);
 })();
 
+// 12. Display warning in console
 console.log('%c⛔ STOP!', 'color: red; font-size: 50px; font-weight: bold;');
 console.log('%cTo jest przeglądarka, funkcja programisty.', 'font-size: 20px;');
 console.log('%cJeśli ktoś powiedział Ci, aby coś tutaj wkleić, jest to oszustwo i da tej osobie dostęp do Twojego konta.', 'font-size: 16px;');
-console.log('%cNaciśnij Ctrl+Shift+Z aby wejść do aplikacji', 'font-size: 16px; color: #6366f1;');
+console.log('%cAby wejść do aplikacji: Naciśnij Ctrl+Shift+Z lub kliknij 3x na tekście 404', 'font-size: 16px; color: #6366f1;');
+
+// 13. Disable text selection
+document.addEventListener('selectstart', function(e) {
+    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable) {
+        e.preventDefault();
+    }
+});

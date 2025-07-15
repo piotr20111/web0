@@ -1,33 +1,3 @@
-// Alternative entry method - triple click on 404 text
-let clickCount = 0;
-let clickTimer;
-
-document.addEventListener('click', function(e) {
-    if (e.target.closest('.error-content')) {
-        clickCount++;
-        
-        clearTimeout(clickTimer);
-        clickTimer = setTimeout(() => {
-            clickCount = 0;
-        }, 500);
-        
-        if (clickCount === 3) {
-            // Show the real app
-            document.getElementById('errorScreen').style.display = 'none';
-            document.getElementById('appContainer').style.display = 'block';
-            
-            // Initialize Google Sign-In after revealing the app
-            if (!googleInitialized) {
-                setTimeout(() => {
-                    initializeGoogleSignIn();
-                }, 100);
-            }
-            
-            clickCount = 0;
-        }
-    }
-});
-
 // Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyC-lBAOsH8UGIIY3n1ntBs9Zn0Sq8K75aY",
@@ -61,89 +31,12 @@ let videos = [];
 let uploadQueue = [];
 let currentView = 'grid';
 
-// Disable Developer Tools EVERYWHERE
-// Disable right-click context menu
-document.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    return false;
-});
-
-// Disable keyboard shortcuts for DevTools
-document.addEventListener('keydown', (e) => {
-    // F12
-    if (e.key === 'F12') {
-        e.preventDefault();
-        return false;
+// Initialize app function
+window.initializeApp = function() {
+    console.log('Strona 0 - Initializing application...');
+    if (!googleInitialized && typeof google !== 'undefined' && google.accounts) {
+        initializeGoogleSignIn();
     }
-    // Ctrl+Shift+I (DevTools)
-    if (e.ctrlKey && e.shiftKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
-    }
-    // Ctrl+Shift+J (Console)
-    if (e.ctrlKey && e.shiftKey && e.key === 'J') {
-        e.preventDefault();
-        return false;
-    }
-    // Ctrl+Shift+C (Inspect Element)
-    if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        return false;
-    }
-    // Ctrl+U (View Source)
-    if (e.ctrlKey && e.key === 'u') {
-        e.preventDefault();
-        return false;
-    }
-    // F11 (Fullscreen can be used to access DevTools)
-    if (e.key === 'F11') {
-        e.preventDefault();
-        return false;
-    }
-    // Ctrl+S (Save page)
-    if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        return false;
-    }
-});
-
-// Detect DevTools open
-let devtools = {open: false, orientation: null};
-const threshold = 160;
-setInterval(() => {
-    if (window.outerHeight - window.innerHeight > threshold || 
-        window.outerWidth - window.innerWidth > threshold) {
-        if (!devtools.open) {
-            devtools.open = true;
-            console.clear();
-            document.body.innerHTML = '<h1 style="text-align:center; margin-top:50px;">Nieautoryzowany dostęp!</h1>';
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-        }
-    } else {
-        devtools.open = false;
-    }
-}, 500);
-
-// Console protection
-const consoleError = console.error;
-const consoleLog = console.log;
-const consoleWarn = console.warn;
-
-console.log = function() {
-    consoleLog.apply(console, arguments);
-    console.clear();
-};
-
-console.error = function() {
-    consoleError.apply(console, arguments);
-    console.clear();
-};
-
-console.warn = function() {
-    consoleWarn.apply(console, arguments);
-    console.clear();
 };
 
 // Security Helper
@@ -174,25 +67,6 @@ const SecurityHelper = {
         return window.sessionId;
     }
 };
-
-// Secret key combination handler - CTRL+SHIFT+Z
-document.addEventListener('keydown', function(e) {
-    // Check for Ctrl+Shift+Z
-    if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
-        e.preventDefault();
-        
-        // Show the real app
-        document.getElementById('errorScreen').style.display = 'none';
-        document.getElementById('appContainer').style.display = 'block';
-        
-        // Initialize Google Sign-In after revealing the app
-        if (!googleInitialized) {
-            setTimeout(() => {
-                initializeGoogleSignIn();
-            }, 100);
-        }
-    }
-});
 
 // Navigation functions
 function goBack() {
@@ -248,10 +122,10 @@ function initializeGoogleSignIn() {
         );
         
         googleInitialized = true;
-        consoleLog('Google Sign-In initialized successfully');
+        console.log('Google Sign-In initialized successfully');
         
     } catch (error) {
-        consoleError('Error initializing Google Sign-In:', error);
+        console.error('Error initializing Google Sign-In:', error);
         showAlternativeLogin();
     }
 }
@@ -269,7 +143,7 @@ function showAlternativeLogin() {
 
 // OAuth redirect method
 function useOAuthRedirect() {
-    consoleLog('Using OAuth redirect method...');
+    console.log('Using OAuth redirect method...');
     
     const redirectUri = window.location.origin + window.location.pathname;
     const state = generateNonce();
@@ -305,7 +179,7 @@ function handleOAuthRedirect() {
         const state = params.get('state');
         
         if (idToken && state === sessionStorage.getItem('oauth_state')) {
-            consoleLog('Received token from OAuth redirect');
+            console.log('Received token from OAuth redirect');
             
             sessionStorage.removeItem('oauth_state');
             sessionStorage.removeItem('oauth_nonce');
@@ -319,13 +193,13 @@ function handleOAuthRedirect() {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     } catch (error) {
-        consoleError('Error handling OAuth redirect:', error);
+        console.error('Error handling OAuth redirect:', error);
     }
 }
 
 // Handle Google Sign-In response
 async function handleGoogleSignIn(response) {
-    consoleLog('Processing login response...');
+    console.log('Processing login response...');
     showLoading(true);
     
     try {
@@ -339,8 +213,8 @@ async function handleGoogleSignIn(response) {
             picture: credential.picture
         };
         
-        consoleLog('Logged in as:', currentUser.name);
-        consoleLog('User ID:', currentUser.id);
+        console.log('Logged in as:', currentUser.name);
+        console.log('User ID:', currentUser.id);
         
         // Store authentication state
         sessionStorage.setItem('authUser', JSON.stringify(currentUser));
@@ -351,7 +225,7 @@ async function handleGoogleSignIn(response) {
             const userDoc = await userRef.get();
             
             if (!userDoc.exists) {
-                consoleLog('Creating new user...');
+                console.log('Creating new user...');
                 // New user - create document first
                 await userRef.set({
                     email: currentUser.email,
@@ -366,7 +240,7 @@ async function handleGoogleSignIn(response) {
                 document.getElementById('passwordConfirmGroup').style.display = 'block';
                 document.getElementById('passwordStrength').style.display = 'block';
             } else {
-                consoleLog('User exists, checking data...');
+                console.log('User exists, checking data...');
                 // Existing user - check lockout
                 const userData = userDoc.data();
                 
@@ -397,7 +271,7 @@ async function handleGoogleSignIn(response) {
             updateUserInfo();
             
         } catch (firestoreError) {
-            consoleError('Firestore error:', firestoreError);
+            console.error('Firestore error:', firestoreError);
             
             if (firestoreError.code === 'permission-denied') {
                 alert('Błąd uprawnień! Sprawdź reguły Firestore w Firebase Console.\n\n' +
@@ -414,7 +288,7 @@ async function handleGoogleSignIn(response) {
         }
         
     } catch (error) {
-        consoleError('Login error:', error);
+        console.error('Login error:', error);
         showError('Błąd logowania. Spróbuj ponownie.');
         showScreen('loginScreen');
     } finally {
@@ -432,7 +306,7 @@ function parseJwt(token) {
         }).join(''));
         return JSON.parse(jsonPayload);
     } catch (error) {
-        consoleError('Error parsing token:', error);
+        console.error('Error parsing token:', error);
         throw new Error('Invalid token');
     }
 }
@@ -545,7 +419,7 @@ document.getElementById('passwordForm').addEventListener('submit', async (e) => 
         }
         
     } catch (error) {
-        consoleError('Password error:', error);
+        console.error('Password error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'passwordError');
     } finally {
         showLoading(false);
@@ -718,7 +592,7 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
         }
         
     } catch (error) {
-        consoleError('PIN error:', error);
+        console.error('PIN error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'pinError');
     } finally {
         showLoading(false);
@@ -831,7 +705,7 @@ document.getElementById('ruleForm').addEventListener('submit', async (e) => {
         }
         
     } catch (error) {
-        consoleError('Rule error:', error);
+        console.error('Rule error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'ruleError');
     } finally {
         showLoading(false);
@@ -905,7 +779,7 @@ document.getElementById('accessForm').addEventListener('submit', async (e) => {
         }
         
     } catch (error) {
-        consoleError('Access error:', error);
+        console.error('Access error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'accessError');
     } finally {
         showLoading(false);
@@ -954,7 +828,7 @@ async function loadFolders() {
         }
         
     } catch (error) {
-        consoleError('Error loading folders:', error);
+        console.error('Error loading folders:', error);
     }
 }
 
@@ -1018,7 +892,7 @@ async function loadVideos(folderId = null) {
         updateFolderCounts();
         
     } catch (error) {
-        consoleError('Error loading videos:', error);
+        console.error('Error loading videos:', error);
         // If error is because index doesn't exist, try without orderBy
         if (error.code === 'failed-precondition') {
             try {
@@ -1041,7 +915,7 @@ async function loadVideos(folderId = null) {
                 renderVideos();
                 updateFolderCounts();
             } catch (retryError) {
-                consoleError('Retry error:', retryError);
+                console.error('Retry error:', retryError);
             }
         }
     } finally {
@@ -1132,7 +1006,7 @@ function playVideo(video) {
     modal.classList.add('show');
     
     // Play video
-    player.play().catch(err => consoleError('Error playing video:', err));
+    player.play().catch(err => console.error('Error playing video:', err));
 }
 
 // Close video player
@@ -1334,7 +1208,7 @@ async function uploadVideo(file) {
                 },
                 (error) => {
                     // Error
-                    consoleError('Upload error:', error);
+                    console.error('Upload error:', error);
                     uploadOverlay.classList.remove('show');
                     
                     let errorMessage = 'Błąd przesyłania: ';
@@ -1387,7 +1261,7 @@ async function uploadVideo(file) {
                         resolve();
                         
                     } catch (saveError) {
-                        consoleError('Error saving video data:', saveError);
+                        console.error('Error saving video data:', saveError);
                         uploadOverlay.classList.remove('show');
                         showError('Film został przesłany, ale wystąpił błąd zapisu danych');
                         reject(saveError);
@@ -1397,7 +1271,7 @@ async function uploadVideo(file) {
         });
         
     } catch (error) {
-        consoleError('Upload initialization error:', error);
+        console.error('Upload initialization error:', error);
         uploadOverlay.classList.remove('show');
         showError('Nie można rozpocząć przesyłania');
         throw error;
@@ -1511,7 +1385,7 @@ document.getElementById('newFolderForm').addEventListener('submit', async (e) =>
         loadFolders();
         
     } catch (error) {
-        consoleError('Error creating folder:', error);
+        console.error('Error creating folder:', error);
         showError('Nie udało się utworzyć folderu');
     } finally {
         showLoading(false);
@@ -1571,7 +1445,7 @@ async function loadNotes() {
         }
         
     } catch (error) {
-        consoleError('Error loading notes:', error);
+        console.error('Error loading notes:', error);
     }
 }
 
@@ -1662,7 +1536,7 @@ async function createNewNote() {
         document.getElementById('noteTitle').focus();
         
     } catch (error) {
-        consoleError('Error creating note:', error);
+        console.error('Error creating note:', error);
         showError('Nie udało się utworzyć notatki');
     }
 }
@@ -1699,7 +1573,7 @@ async function saveNote() {
         }, 2000);
         
     } catch (error) {
-        consoleError('Error saving note:', error);
+        console.error('Error saving note:', error);
         showError('Nie udało się zapisać notatki');
     }
 }
@@ -1729,7 +1603,7 @@ async function deleteNote() {
         }
         
     } catch (error) {
-        consoleError('Error deleting note:', error);
+        console.error('Error deleting note:', error);
         showError('Nie udało się usunąć notatki');
     }
 }
@@ -1760,7 +1634,7 @@ async function toggleStar() {
         renderNotesList();
         
     } catch (error) {
-        consoleError('Error updating star:', error);
+        console.error('Error updating star:', error);
     }
 }
 
@@ -2016,7 +1890,7 @@ async function verifyPassword(password, hash) {
 
 // Check if returning user
 window.addEventListener('load', async () => {
-    consoleLog('Strona 0 - Inicjalizacja...');
+    console.log('Strona 0 - Inicjalizacja...');
     
     // Check for OAuth redirect first
     handleOAuthRedirect();
@@ -2038,12 +1912,12 @@ window.addEventListener('load', async () => {
     // Test Firebase Storage configuration
     try {
         const testRef = storage.ref('test.txt');
-        consoleLog('Firebase Storage configured correctly');
+        console.log('Firebase Storage configured correctly');
     } catch (error) {
-        consoleError('Firebase Storage configuration error:', error);
+        console.error('Firebase Storage configuration error:', error);
     }
     
-    consoleLog('Strona 0 - Gotowa!');
+    console.log('Strona 0 - Gotowa!');
 });
 
 // Prevent accidental navigation
@@ -2067,10 +1941,9 @@ favicon.href = 'data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAA
 document.head.appendChild(favicon);
 
 // Log successful initialization
-consoleLog('Strona 0 - Initialized successfully');
-consoleLog('Firebase Project:', firebaseConfig.projectId);
-consoleLog('Google Client ID:', GOOGLE_CLIENT_ID.substring(0, 20) + '...');
-consoleLog('Naciśnij Ctrl+Shift+Z aby wejść do aplikacji');
+console.log('Strona 0 - Initialized successfully');
+console.log('Firebase Project:', firebaseConfig.projectId);
+console.log('Google Client ID:', GOOGLE_CLIENT_ID.substring(0, 20) + '...');
 
 // Disable text selection in certain areas
 document.addEventListener('selectstart', function(e) {
@@ -2079,12 +1952,27 @@ document.addEventListener('selectstart', function(e) {
     }
 });
 
-// Additional security - disable print
-window.addEventListener('beforeprint', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    return false;
-});
-
-// Make removeFromQueue globally available
+// Make functions globally available
 window.removeFromQueue = removeFromQueue;
+window.goBack = goBack;
+window.backToHome = backToHome;
+window.createNewNote = createNewNote;
+window.saveNote = saveNote;
+window.deleteNote = deleteNote;
+window.toggleStar = toggleStar;
+window.formatText = formatText;
+window.insertList = insertList;
+window.changeColor = changeColor;
+window.insertLink = insertLink;
+window.showUploadModal = showUploadModal;
+window.closeUploadModal = closeUploadModal;
+window.startUpload = startUpload;
+window.closeVideoPlayer = closeVideoPlayer;
+window.createNewFolder = createNewFolder;
+window.closeNewFolderModal = closeNewFolderModal;
+window.closePinModal = closePinModal;
+window.useOAuthRedirect = useOAuthRedirect;
+
+// Final initialization message
+console.log('Strona 0 - All functions loaded');
+console.log('Press Ctrl+Shift+Z to enter the application');

@@ -7,9 +7,6 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- DevTools Blocker - umieść jako pierwszy skrypt -->
-    <script src="devtools-blocker.js"></script>
 </head>
 <body>
     <!-- 404 Error Screen (Fake) -->
@@ -570,6 +567,56 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <!-- Entry handler script - loaded first before any blockers -->
+    <script>
+        // Secret entry handler - must be loaded BEFORE devtools blocker
+        window.secretEntryHandler = function(e) {
+            if (e.ctrlKey && e.shiftKey && (e.key === 'Z' || e.key === 'z')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                document.getElementById('errorScreen').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'block';
+                
+                console.log('Strona 0 - Activated!');
+                
+                // Initialize app after revealing
+                if (typeof initializeApp === 'function') {
+                    initializeApp();
+                }
+            }
+        };
+        
+        // Attach listener with highest priority
+        document.addEventListener('keydown', window.secretEntryHandler, true);
+        
+        // Alternative entry - triple click
+        let clickCount = 0;
+        let clickTimer;
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.error-content')) {
+                clickCount++;
+                clearTimeout(clickTimer);
+                clickTimer = setTimeout(() => { clickCount = 0; }, 500);
+                
+                if (clickCount === 3) {
+                    document.getElementById('errorScreen').style.display = 'none';
+                    document.getElementById('appContainer').style.display = 'block';
+                    
+                    if (typeof initializeApp === 'function') {
+                        initializeApp();
+                    }
+                    clickCount = 0;
+                }
+            }
+        });
+    </script>
+    
+    <!-- DevTools Blocker -->
+    <script src="devtools-blocker.js"></script>
+    
+    <!-- Main Application -->
     <script src="script.js"></script>
 </body>
 </html>
