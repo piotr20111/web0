@@ -801,16 +801,23 @@ function showVideosSection() {
     loadVideos();
 }
 
-// Load folders
+// Load folders - FIXED
 async function loadFolders() {
     try {
+        console.log('Loading folders for user:', currentUser.id);
+        
         const foldersSnapshot = await db.collection('users').doc(currentUser.id)
-            .collection('folders').orderBy('name').get();
+            .collection('folders').get();
         
         folders = [];
         foldersSnapshot.forEach(doc => {
             folders.push({ id: doc.id, ...doc.data() });
         });
+        
+        console.log('Loaded folders:', folders.length);
+        
+        // Sort folders by name
+        folders.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         
         // Add default "All Videos" folder
         folders.unshift({
@@ -829,6 +836,15 @@ async function loadFolders() {
         
     } catch (error) {
         console.error('Error loading folders:', error);
+        // Create folders collection if it doesn't exist
+        folders = [{
+            id: 'all',
+            name: 'Wszystkie filmy',
+            videoCount: 0,
+            isDefault: true
+        }];
+        renderFoldersList();
+        selectFolder(folders[0]);
     }
 }
 
@@ -868,10 +884,11 @@ function selectFolder(folder) {
     loadVideos(folder.id === 'all' ? null : folder.id);
 }
 
-// Load videos
+// Load videos - FIXED
 async function loadVideos(folderId = null) {
     try {
         showLoading(true);
+        console.log('Loading videos for folder:', folderId);
         
         let query = db.collection('users').doc(currentUser.id).collection('videos');
         
@@ -879,45 +896,29 @@ async function loadVideos(folderId = null) {
             query = query.where('folderId', '==', folderId);
         }
         
-        const videosSnapshot = await query.orderBy('uploadedAt', 'desc').get();
+        const videosSnapshot = await query.get();
         
         videos = [];
         videosSnapshot.forEach(doc => {
             videos.push({ id: doc.id, ...doc.data() });
         });
         
-        renderVideos();
+        console.log('Loaded videos:', videos.length);
         
-        // Update folder counts
+        // Sort by upload date locally
+        videos.sort((a, b) => {
+            const dateA = new Date(a.uploadedAt || 0);
+            const dateB = new Date(b.uploadedAt || 0);
+            return dateB - dateA;
+        });
+        
+        renderVideos();
         updateFolderCounts();
         
     } catch (error) {
         console.error('Error loading videos:', error);
-        // If error is because index doesn't exist, try without orderBy
-        if (error.code === 'failed-precondition') {
-            try {
-                let query = db.collection('users').doc(currentUser.id).collection('videos');
-                
-                if (folderId) {
-                    query = query.where('folderId', '==', folderId);
-                }
-                
-                const videosSnapshot = await query.get();
-                
-                videos = [];
-                videosSnapshot.forEach(doc => {
-                    videos.push({ id: doc.id, ...doc.data() });
-                });
-                
-                // Sort locally
-                videos.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-                
-                renderVideos();
-                updateFolderCounts();
-            } catch (retryError) {
-                console.error('Retry error:', retryError);
-            }
-        }
+        videos = [];
+        renderVideos();
     } finally {
         showLoading(false);
     }
@@ -1043,7 +1044,7 @@ function closeUploadModal() {
     renderUploadQueue();
 }
 
-// File input handling
+// File input handling - ENHANCED FOR MORE FORMATS
 document.getElementById('videoFileInput').addEventListener('change', (e) => {
     handleFileSelect(e.target.files);
 });
@@ -1066,14 +1067,39 @@ dropzone.addEventListener('drop', (e) => {
     handleFileSelect(e.dataTransfer.files);
 });
 
-// Handle file selection
+// Handle file selection - ENHANCED
 function handleFileSelect(files) {
+    // Supported video formats
+    const supportedFormats = [
+        'video/mp4',
+        'video/webm',
+        'video/ogg',
+        'video/quicktime', // MOV
+        'video/x-msvideo', // AVI
+        'video/x-matroska', // MKV
+        'video/x-flv', // FLV
+        'video/3gpp', // 3GP
+        'video/mpeg', // MPEG
+        'video/x-ms-wmv' // WMV
+    ];
+    
     const videoFiles = Array.from(files).filter(file => {
-        return file.type.startsWith('video/') && file.size <= 5 * 1024 * 1024 * 1024; // 5GB limit
+        // Check by MIME type
+        let isVideo = supportedFormats.some(format => file.type.startsWith(format));
+        
+        // Also check by extension if MIME type is not recognized
+        if (!isVideo) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'flv', '3gp', 'mpeg', 'mpg', 'wmv', 'm4v'];
+            isVideo = videoExtensions.includes(ext);
+        }
+        
+        // Size limit check (5GB)
+        return isVideo && file.size <= 5 * 1024 * 1024 * 1024;
     });
     
     if (videoFiles.length === 0) {
-        showError('Wybierz pliki wideo (maks. 5GB)');
+        showError('Wybierz pliki wideo (MP4, WebM, MOV, AVI, MKV, FLV, 3GP, MPEG, WMV - maks. 5GB)');
         return;
     }
     
@@ -1145,7 +1171,7 @@ async function startUpload() {
     loadVideos(currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null);
 }
 
-// Upload video with proper error handling
+// Upload video - COMPLETELY REWRITTEN
 async function uploadVideo(file) {
     const uploadOverlay = document.getElementById('uploadOverlay');
     const progressFill = document.getElementById('uploadProgressFill');
@@ -1157,105 +1183,123 @@ async function uploadVideo(file) {
     document.getElementById('uploadFileName').textContent = file.name;
     
     try {
+        console.log('Starting upload for:', file.name);
+        
         // Create unique file name
         const timestamp = Date.now();
         const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileName = `${timestamp}_${sanitizedFileName}`;
-        const storageRef = storage.ref(`videos/${currentUser.id}/${fileName}`);
+        const fileName = `${currentUser.id}/${timestamp}_${sanitizedFileName}`;
+        
+        console.log('Storage path:', fileName);
+        
+        // Create storage reference
+        const storageRef = firebase.storage().ref(`videos/${fileName}`);
         
         // Create upload task
         const uploadTask = storageRef.put(file, {
-            contentType: file.type,
+            contentType: file.type || 'video/mp4',
             customMetadata: {
                 'uploadedBy': currentUser.email,
-                'originalName': file.name
+                'originalName': file.name,
+                'uploadTime': new Date().toISOString()
             }
         });
         
         let startTime = Date.now();
         let lastBytes = 0;
         
-        // Return promise to handle upload
-        return new Promise((resolve, reject) => {
+        // Handle upload with promise
+        await new Promise((resolve, reject) => {
             uploadTask.on('state_changed', 
                 (snapshot) => {
-                    // Progress
+                    // Progress update
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                     progressFill.style.width = progress + '%';
                     uploadStatus.textContent = Math.round(progress) + '%';
                     
                     // Calculate speed
                     const currentTime = Date.now();
-                    const elapsedSeconds = (currentTime - startTime) / 1000;
+                    const elapsedSeconds = (currentTime - startTime) / 1000 || 1;
                     const bytesTransferred = snapshot.bytesTransferred - lastBytes;
                     const bytesPerSecond = bytesTransferred / elapsedSeconds;
                     const mbPerSecond = (bytesPerSecond / (1024 * 1024)).toFixed(1);
                     uploadSpeed.textContent = mbPerSecond + ' MB/s';
                     
                     // Calculate time remaining
-                    const bytesRemaining = snapshot.totalBytes - snapshot.bytesTransferred;
-                    const secondsRemaining = Math.ceil(bytesRemaining / bytesPerSecond);
-                    const minutesRemaining = Math.ceil(secondsRemaining / 60);
-                    
-                    if (minutesRemaining > 1) {
-                        uploadTimeLeft.textContent = `${minutesRemaining} min`;
-                    } else {
-                        uploadTimeLeft.textContent = `${secondsRemaining} sek`;
+                    if (bytesPerSecond > 0) {
+                        const bytesRemaining = snapshot.totalBytes - snapshot.bytesTransferred;
+                        const secondsRemaining = Math.ceil(bytesRemaining / bytesPerSecond);
+                        const minutesRemaining = Math.ceil(secondsRemaining / 60);
+                        
+                        if (minutesRemaining > 1) {
+                            uploadTimeLeft.textContent = `${minutesRemaining} min`;
+                        } else {
+                            uploadTimeLeft.textContent = `${secondsRemaining} sek`;
+                        }
                     }
                     
                     lastBytes = snapshot.bytesTransferred;
                     startTime = currentTime;
+                    
+                    console.log(`Upload progress: ${Math.round(progress)}%`);
                 },
                 (error) => {
-                    // Error
+                    // Handle errors
                     console.error('Upload error:', error);
                     uploadOverlay.classList.remove('show');
                     
                     let errorMessage = 'Błąd przesyłania: ';
                     switch (error.code) {
                         case 'storage/unauthorized':
-                            errorMessage += 'Brak uprawnień do przesyłania';
+                            errorMessage += 'Brak uprawnień. Sprawdź reguły Storage w Firebase Console.';
                             break;
                         case 'storage/canceled':
                             errorMessage += 'Przesyłanie anulowane';
                             break;
                         case 'storage/unknown':
-                            errorMessage += 'Nieznany błąd';
+                            errorMessage += 'Nieznany błąd. Sprawdź połączenie internetowe.';
                             break;
                         default:
-                            errorMessage += error.message;
+                            errorMessage += error.message || 'Nieznany błąd';
                     }
                     
                     showError(errorMessage);
                     reject(error);
                 },
                 async () => {
-                    // Complete
+                    // Upload completed successfully
                     try {
+                        console.log('Upload completed, getting download URL...');
                         const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                        console.log('Download URL obtained:', downloadURL.substring(0, 50) + '...');
                         
-                        // Get video duration
+                        // Get video metadata
                         const duration = await getVideoDuration(file);
-                        
-                        // Generate thumbnail
                         const thumbnail = await generateVideoThumbnail(file);
                         
-                        // Save to Firestore
-                        const videoData = SecurityHelper.addSecurityFields({
+                        // Prepare video data
+                        const videoData = {
                             title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
                             fileName: file.name,
-                            storagePath: `videos/${currentUser.id}/${fileName}`,
+                            storagePath: `videos/${fileName}`,
                             size: file.size,
-                            type: file.type,
+                            type: file.type || 'video/mp4',
                             url: downloadURL,
                             thumbnail: thumbnail,
-                            duration: duration,
+                            duration: duration || 0,
                             folderId: currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null,
-                            uploadedAt: new Date().toISOString()
-                        });
+                            uploadedAt: new Date().toISOString(),
+                            uploadedBy: currentUser.email,
+                            ...SecurityHelper.addSecurityFields({})
+                        };
                         
-                        await db.collection('users').doc(currentUser.id)
+                        console.log('Saving video data to Firestore...');
+                        
+                        // Save to Firestore
+                        const docRef = await db.collection('users').doc(currentUser.id)
                             .collection('videos').add(videoData);
+                        
+                        console.log('Video saved with ID:', docRef.id);
                         
                         uploadOverlay.classList.remove('show');
                         resolve();
@@ -1263,22 +1307,32 @@ async function uploadVideo(file) {
                     } catch (saveError) {
                         console.error('Error saving video data:', saveError);
                         uploadOverlay.classList.remove('show');
-                        showError('Film został przesłany, ale wystąpił błąd zapisu danych');
+                        
+                        // Delete uploaded file if database save fails
+                        try {
+                            await storageRef.delete();
+                        } catch (deleteError) {
+                            console.error('Error deleting file after failed save:', deleteError);
+                        }
+                        
+                        showError('Film został przesłany, ale wystąpił błąd zapisu do bazy danych.');
                         reject(saveError);
                     }
                 }
             );
         });
         
+        console.log('Upload process completed successfully');
+        
     } catch (error) {
         console.error('Upload initialization error:', error);
         uploadOverlay.classList.remove('show');
-        showError('Nie można rozpocząć przesyłania');
+        showError('Nie można rozpocząć przesyłania. Sprawdź połączenie internetowe.');
         throw error;
     }
 }
 
-// Get video duration
+// Get video duration - IMPROVED
 async function getVideoDuration(file) {
     return new Promise((resolve) => {
         const video = document.createElement('video');
@@ -1286,23 +1340,34 @@ async function getVideoDuration(file) {
         
         video.onloadedmetadata = function() {
             window.URL.revokeObjectURL(video.src);
-            resolve(video.duration);
+            const duration = video.duration;
+            console.log('Video duration:', duration);
+            resolve(duration);
         };
         
         video.onerror = function() {
+            console.error('Error loading video metadata');
             resolve(0);
         };
         
         video.src = URL.createObjectURL(file);
+        
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            window.URL.revokeObjectURL(video.src);
+            resolve(0);
+        }, 30000);
     });
 }
 
-// Generate video thumbnail
+// Generate video thumbnail - IMPROVED
 async function generateVideoThumbnail(file) {
     return new Promise((resolve) => {
         const video = document.createElement('video');
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        
+        let seeked = false;
         
         video.addEventListener('loadedmetadata', () => {
             // Seek to 10% of video duration for better thumbnail
@@ -1310,6 +1375,9 @@ async function generateVideoThumbnail(file) {
         });
         
         video.addEventListener('seeked', () => {
+            if (seeked) return;
+            seeked = true;
+            
             // Set canvas size
             canvas.width = 400;
             canvas.height = 225; // 16:9 aspect ratio
@@ -1323,31 +1391,38 @@ async function generateVideoThumbnail(file) {
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         window.URL.revokeObjectURL(video.src);
+                        console.log('Thumbnail generated successfully');
                         resolve(reader.result);
                     };
                     reader.readAsDataURL(blob);
                 } else {
                     window.URL.revokeObjectURL(video.src);
+                    console.log('Failed to generate thumbnail');
                     resolve(null);
                 }
-            }, 'image/jpeg', 0.8);
+            }, 'image/jpeg', 0.7);
         });
         
         video.addEventListener('error', () => {
             window.URL.revokeObjectURL(video.src);
+            console.error('Error loading video for thumbnail');
             resolve(null);
         });
         
         video.src = URL.createObjectURL(file);
         
-        // Timeout fallback
+        // Timeout fallback after 20 seconds
         setTimeout(() => {
-            resolve(null);
-        }, 10000);
+            if (!seeked) {
+                window.URL.revokeObjectURL(video.src);
+                console.log('Thumbnail generation timeout');
+                resolve(null);
+            }
+        }, 20000);
     });
 }
 
-// Create new folder
+// Create new folder - FIXED
 function createNewFolder() {
     document.getElementById('newFolderModal').classList.add('show');
     document.getElementById('folderNameInput').value = '';
@@ -1358,7 +1433,7 @@ function closeNewFolderModal() {
     document.getElementById('newFolderModal').classList.remove('show');
 }
 
-// New folder form
+// New folder form - FIXED
 document.getElementById('newFolderForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -1372,21 +1447,47 @@ document.getElementById('newFolderForm').addEventListener('submit', async (e) =>
     showLoading(true);
     
     try {
-        const folderData = SecurityHelper.addSecurityFields({
+        console.log('Creating new folder:', folderName);
+        
+        const folderData = {
             name: folderName,
             createdAt: new Date().toISOString(),
-            videoCount: 0
-        });
+            videoCount: 0,
+            ...SecurityHelper.addSecurityFields({})
+        };
         
-        await db.collection('users').doc(currentUser.id)
+        const docRef = await db.collection('users').doc(currentUser.id)
             .collection('folders').add(folderData);
         
+        console.log('Folder created with ID:', docRef.id);
+        
+        // Add to local folders array
+        folders.push({
+            id: docRef.id,
+            ...folderData
+        });
+        
+        // Sort folders
+        folders.sort((a, b) => {
+            if (a.isDefault) return -1;
+            if (b.isDefault) return 1;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+        
         closeNewFolderModal();
-        loadFolders();
+        renderFoldersList();
+        
+        // Select the new folder
+        const newFolder = folders.find(f => f.id === docRef.id);
+        if (newFolder) {
+            selectFolder(newFolder);
+        }
+        
+        showError('Folder utworzony pomyślnie!');
         
     } catch (error) {
         console.error('Error creating folder:', error);
-        showError('Nie udało się utworzyć folderu');
+        showError('Nie udało się utworzyć folderu. Sprawdź połączenie internetowe.');
     } finally {
         showLoading(false);
     }
@@ -1431,12 +1532,15 @@ function showNotepad() {
 async function loadNotes() {
     try {
         const notesSnapshot = await db.collection('users').doc(currentUser.id)
-            .collection('notes').orderBy('updatedAt', 'desc').get();
+            .collection('notes').get();
         
         notes = [];
         notesSnapshot.forEach(doc => {
             notes.push({ id: doc.id, ...doc.data() });
         });
+        
+        // Sort by updated date
+        notes.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         
         renderNotesList();
         
@@ -1909,7 +2013,20 @@ window.addEventListener('load', async () => {
         }
     }
     
-    // Test Firebase Storage configuration
+    // Test Firebase connections
+    try {
+        // Test Firestore
+        const testDoc = await db.collection('test').doc('test').get();
+        console.log('Firestore connection: OK');
+    } catch (error) {
+        if (error.code === 'permission-denied') {
+            console.log('Firestore: Permission denied (expected for test collection)');
+        } else {
+            console.error('Firestore error:', error);
+        }
+    }
+    
+    // Test Storage
     try {
         const testRef = storage.ref('test.txt');
         console.log('Firebase Storage configured correctly');
@@ -1973,6 +2090,34 @@ window.closeNewFolderModal = closeNewFolderModal;
 window.closePinModal = closePinModal;
 window.useOAuthRedirect = useOAuthRedirect;
 
+// Additional storage rules info
+console.log(`
+==================================================
+WAŻNE: Upewnij się że Firebase Storage Rules są ustawione:
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+
+LUB dla testów:
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
+==================================================
+`);
+
 // Final initialization message
 console.log('Strona 0 - All functions loaded');
 console.log('Press Ctrl+Shift+Z to enter the application');
+console.log('Triple-click on 404 text as alternative');
