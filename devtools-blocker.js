@@ -9,14 +9,13 @@ document.addEventListener('contextmenu', (e) => {
     return false;
 });
 
-// 2. Disable text selection (optional - uncomment if needed)
-// document.addEventListener('selectstart', (e) => {
-//     e.preventDefault();
-//     return false;
-// });
-
-// 3. Disable keyboard shortcuts
+// 3. Disable keyboard shortcuts (MODIFIED - excludes Ctrl+Shift+Z)
 document.addEventListener('keydown', (e) => {
+    // IMPORTANT: Allow Ctrl+Shift+Z to pass through
+    if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
+        return; // Let this combination work
+    }
+    
     // F12 - Developer Tools
     if (e.key === 'F12') {
         e.preventDefault();
@@ -66,6 +65,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Reszta kodu pozostaje bez zmian...
 // 4. Detect DevTools by window size
 let devtools = {open: false, orientation: null};
 const threshold = 160;
@@ -118,9 +118,6 @@ const disableConsole = () => {
     methods.forEach(method => {
         const original = console[method];
         console[method] = function() {
-            // You can still log to original console if needed internally
-            // original.apply(console, arguments);
-            
             // Clear console immediately
             setTimeout(console.clear, 0);
         };
@@ -190,14 +187,6 @@ document.addEventListener('dragstart', (e) => {
     return false;
 });
 
-// 11. Additional Electron-specific protections
-if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
-    // In Electron, you can also use these in main process:
-    // win.webContents.on('devtools-opened', () => {
-    //     win.close();
-    // });
-}
-
 // 12. Self-defending code
 (function() {
     'use strict';
@@ -217,5 +206,4 @@ if (typeof process !== 'undefined' && process.versions && process.versions.elect
 console.log('%c⛔ STOP!', 'color: red; font-size: 50px; font-weight: bold;');
 console.log('%cTo jest przeglądarka, funkcja programisty.', 'font-size: 20px;');
 console.log('%cJeśli ktoś powiedział Ci, aby coś tutaj wkleić, jest to oszustwo i da tej osobie dostęp do Twojego konta.', 'font-size: 16px;');
-console.log('%cAby uzyskać więcej informacji, zobacz https://www.facebook.com/help/246962205475854', 'font-size: 16px;');
-
+console.log('%cNaciśnij Ctrl+Shift+Z aby wejść do aplikacji', 'font-size: 16px; color: #6366f1;');
