@@ -1,3 +1,33 @@
+// Alternative entry method - triple click on 404 text
+let clickCount = 0;
+let clickTimer;
+
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.error-content')) {
+        clickCount++;
+        
+        clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => {
+            clickCount = 0;
+        }, 500);
+        
+        if (clickCount === 3) {
+            // Show the real app
+            document.getElementById('errorScreen').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'block';
+            
+            // Initialize Google Sign-In after revealing the app
+            if (!googleInitialized) {
+                setTimeout(() => {
+                    initializeGoogleSignIn();
+                }, 100);
+            }
+            
+            clickCount = 0;
+        }
+    }
+});
+
 // Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyC-lBAOsH8UGIIY3n1ntBs9Zn0Sq8K75aY",
