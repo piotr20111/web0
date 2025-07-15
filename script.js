@@ -17,7 +17,7 @@ const db = firebase.firestore();
 let currentUser = null;
 let currentNote = null;
 let notes = [];
-let failedPasswordAttempts = 0;
+let failedPinAttempts = 0;
 let lockoutEndTime = null;
 let isAuthenticated = false;
 let navigationHistory = [];
@@ -63,7 +63,7 @@ function goBack() {
         const previousScreen = navigationHistory.pop();
         showScreen(previousScreen, false);
     } else {
-        showScreen('passwordScreen', false);
+        showScreen('loginScreen', false);
     }
 }
 
@@ -113,7 +113,7 @@ function setupAuthListeners() {
             const userDoc = await db.collection('users').doc(currentUser.id).get();
             
             if (!userDoc.exists) {
-                // First time user - create document and setup password
+                // First time user - create document and setup PIN
                 await db.collection('users').doc(currentUser.id).set({
                     email: currentUser.email,
                     name: currentUser.name,
@@ -121,27 +121,39 @@ function setupAuthListeners() {
                     lastLogin: new Date().toISOString()
                 });
                 
-                // Show password setup
-                showScreen('passwordScreen');
-                document.getElementById('passwordTitle').textContent = 'Utwórz hasło dostępu';
-                document.getElementById('passwordConfirmGroup').style.display = 'block';
-                document.getElementById('passwordStrength').style.display = 'block';
+                // Show PIN setup
+                showScreen('pinScreen');
+                document.getElementById('pinTitle').textContent = 'Utwórz 4-cyfrowy PIN';
+                document.getElementById('pinConfirmContainer').style.display = 'block';
             } else {
                 // Existing user - check lockout
                 const userData = userDoc.data();
                 
-                if (userData.lockoutEndTime && new Date(userData.lockoutEndTime) > new Date()) {
+                // Check for old password lockout and give one more attempt
+                if (userData.lockoutEndTime && new Date(userData.lockoutEndTime) > new Date() && userData.failedAttempts) {
+                    // Reset to allow one more attempt for previously locked accounts
+                    await db.collection('users').doc(currentUser.id).update({
+                        failedPinAttempts: 2,  // Will allow 1 more attempt before lockout at 3
+                        lockoutEndTime: null
+                    });
+                    failedPinAttempts = 2;
+                    
+                    // Show PIN entry
+                    showScreen('pinScreen');
+                    document.getElementById('pinTitle').textContent = 'Wprowadź PIN';
+                    document.getElementById('pinConfirmContainer').style.display = 'none';
+                    showError('Twoje konto było zablokowane. Masz jeszcze 1 próbę.', 'pinError');
+                } else if (userData.lockoutEndTime && new Date(userData.lockoutEndTime) > new Date()) {
                     lockoutEndTime = new Date(userData.lockoutEndTime);
                     showLockout();
                 } else {
                     // Reset failed attempts if any
-                    failedPasswordAttempts = userData.failedAttempts || 0;
+                    failedPinAttempts = userData.failedPinAttempts || 0;
                     
-                    // Show password entry
-                    showScreen('passwordScreen');
-                    document.getElementById('passwordTitle').textContent = 'Wprowadź hasło';
-                    document.getElementById('passwordConfirmGroup').style.display = 'none';
-                    document.getElementById('passwordStrength').style.display = 'none';
+                    // Show PIN entry
+                    showScreen('pinScreen');
+                    document.getElementById('pinTitle').textContent = 'Wprowadź PIN';
+                    document.getElementById('pinConfirmContainer').style.display = 'none';
                 }
             }
             
@@ -180,8 +192,8 @@ function setupAuthListeners() {
             return;
         }
         
-        if (password.length < 6) {
-            showError('Hasło musi mieć minimum 6 znaków', 'registerError');
+        if (password.length < 8) {
+            showError('Hasło musi mieć minimum 8 znaków', 'registerError');
             return;
         }
         
@@ -214,11 +226,10 @@ function setupAuthListeners() {
             // Store authentication state
             sessionStorage.setItem('authUser', JSON.stringify(currentUser));
             
-            // Show password setup
-            showScreen('passwordScreen');
-            document.getElementById('passwordTitle').textContent = 'Utwórz hasło dostępu';
-            document.getElementById('passwordConfirmGroup').style.display = 'block';
-            document.getElementById('passwordStrength').style.display = 'block';
+            // Show PIN setup
+            showScreen('pinScreen');
+            document.getElementById('pinTitle').textContent = 'Utwórz 4-cyfrowy PIN';
+            document.getElementById('pinConfirmContainer').style.display = 'block';
             
             updateUserInfo();
             
@@ -295,8 +306,8 @@ function setupAuthListeners() {
         let strength = 0;
         
         // Length check
-        if (password.length >= 6) strength++;
-        if (password.length >= 10) strength++;
+        if (password.length >= 8) strength++;
+        if (password.length >= 12) strength++;
         
         // Character variety
         if (/[a-z]/.test(password)) strength++;
@@ -323,152 +334,10 @@ function setupAuthListeners() {
 // Update user info in UI
 function updateUserInfo() {
     if (currentUser) {
-        document.getElementById('userAvatar').src = currentUser.picture;
-        document.getElementById('userName').textContent = currentUser.name;
         document.getElementById('sidebarAvatar').src = currentUser.picture;
         document.getElementById('sidebarUserName').textContent = currentUser.name;
     }
 }
-
-// Password handling
-document.getElementById('passwordForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const password = document.getElementById('passwordInput').value;
-    const confirmPassword = document.getElementById('passwordConfirm').value;
-    const isNewUser = document.getElementById('passwordConfirmGroup').style.display !== 'none';
-    
-    showLoading(true);
-    
-    try {
-        if (isNewUser) {
-            // Create new password
-            if (password !== confirmPassword) {
-                showError('Hasła nie są identyczne', 'passwordError');
-                showLoading(false);
-                return;
-            }
-            
-            if (password.length < 8) {
-                showError('Hasło musi mieć minimum 8 znaków', 'passwordError');
-                showLoading(false);
-                return;
-            }
-            
-            // Hash password
-            const hashedPassword = await hashPassword(password);
-            
-            // Save to Firestore with security fields
-            const userData = SecurityHelper.addSecurityFields({
-                email: currentUser.email,
-                name: currentUser.name,
-                password: hashedPassword,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                failedAttempts: 0
-            });
-            
-            await db.collection('users').doc(currentUser.id).update(userData);
-            
-            // Show PIN setup
-            showScreen('pinScreen');
-            document.getElementById('pinTitle').textContent = 'Utwórz 4-cyfrowy PIN';
-            document.getElementById('pinConfirmContainer').style.display = 'block';
-            
-        } else {
-            // Verify existing password
-            const userDoc = await db.collection('users').doc(currentUser.id).get();
-            const userData = userDoc.data();
-            
-            const isValid = await verifyPassword(password, userData.password);
-            
-            if (isValid) {
-                // Reset failed attempts
-                await db.collection('users').doc(currentUser.id).update({
-                    failedAttempts: 0,
-                    lockoutEndTime: null,
-                    lastLogin: new Date().toISOString()
-                });
-                
-                failedPasswordAttempts = 0;
-                
-                // Check if PIN exists
-                if (!userData.pin) {
-                    showScreen('pinScreen');
-                    document.getElementById('pinTitle').textContent = 'Utwórz 4-cyfrowy PIN';
-                    document.getElementById('pinConfirmContainer').style.display = 'block';
-                } else {
-                    showScreen('pinScreen');
-                    document.getElementById('pinTitle').textContent = 'Wprowadź PIN';
-                    document.getElementById('pinConfirmContainer').style.display = 'none';
-                }
-            } else {
-                // Invalid password
-                failedPasswordAttempts++;
-                
-                if (failedPasswordAttempts >= 2) {
-                    // Lock account for 5 hours
-                    const lockoutEnd = new Date();
-                    lockoutEnd.setHours(lockoutEnd.getHours() + 5);
-                    
-                    await db.collection('users').doc(currentUser.id).update({
-                        failedAttempts: failedPasswordAttempts,
-                        lockoutEndTime: lockoutEnd.toISOString()
-                    });
-                    
-                    lockoutEndTime = lockoutEnd;
-                    showLockout();
-                } else {
-                    showError(`Nieprawidłowe hasło. Pozostała próba: ${2 - failedPasswordAttempts}`, 'passwordError');
-                    
-                    await db.collection('users').doc(currentUser.id).update({
-                        failedAttempts: failedPasswordAttempts
-                    });
-                }
-            }
-        }
-        
-    } catch (error) {
-        console.error('Password error:', error);
-        showError('Wystąpił błąd. Spróbuj ponownie.', 'passwordError');
-    } finally {
-        showLoading(false);
-    }
-});
-
-// Password strength indicator
-document.getElementById('passwordInput').addEventListener('input', (e) => {
-    const password = e.target.value;
-    const strengthBar = document.querySelector('.strength-fill');
-    const strengthText = document.querySelector('.strength-text');
-    
-    if (document.getElementById('passwordStrength').style.display === 'none') return;
-    
-    let strength = 0;
-    
-    // Length check
-    if (password.length >= 8) strength++;
-    if (password.length >= 12) strength++;
-    
-    // Character variety
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^A-Za-z0-9]/.test(password)) strength++;
-    
-    // Update UI
-    strengthBar.className = 'strength-fill';
-    
-    if (strength <= 2) {
-        strengthBar.classList.add('weak');
-        strengthText.textContent = 'Słabe';
-    } else if (strength <= 4) {
-        strengthBar.classList.add('medium');
-        strengthText.textContent = 'Średnie';
-    } else {
-        strengthBar.classList.add('strong');
-        strengthText.textContent = 'Silne';
-    }
-});
 
 // Toggle password visibility
 document.querySelectorAll('.toggle-password').forEach(btn => {
@@ -550,7 +419,8 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
             
             // Save to Firestore
             await db.collection('users').doc(currentUser.id).update({
-                pin: hashedPin
+                pin: hashedPin,
+                failedPinAttempts: 0
             });
             
             // Check if user has rule
@@ -577,6 +447,15 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
             const isValid = await verifyPassword(pin, userData.pin);
             
             if (isValid) {
+                // Reset failed attempts
+                await db.collection('users').doc(currentUser.id).update({
+                    failedPinAttempts: 0,
+                    lockoutEndTime: null,
+                    lastLogin: new Date().toISOString()
+                });
+                
+                failedPinAttempts = 0;
+                
                 // Check if rule exists
                 if (!userData.rule) {
                     showScreen('ruleScreen');
@@ -588,14 +467,35 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
                     document.getElementById('ruleConfirmContainer').style.display = 'none';
                 }
             } else {
-                showError('Nieprawidłowy PIN', 'pinError');
+                // Invalid PIN
+                failedPinAttempts++;
                 
-                // Clear inputs
-                pinDigits.forEach(input => {
-                    input.value = '';
-                    input.classList.remove('filled');
-                });
-                pinDigits[0].focus();
+                if (failedPinAttempts >= 3) {
+                    // Lock account for 5 hours
+                    const lockoutEnd = new Date();
+                    lockoutEnd.setHours(lockoutEnd.getHours() + 5);
+                    
+                    await db.collection('users').doc(currentUser.id).update({
+                        failedPinAttempts: failedPinAttempts,
+                        lockoutEndTime: lockoutEnd.toISOString()
+                    });
+                    
+                    lockoutEndTime = lockoutEnd;
+                    showLockout();
+                } else {
+                    showError(`Nieprawidłowy PIN. Pozostało prób: ${3 - failedPinAttempts}`, 'pinError');
+                    
+                    await db.collection('users').doc(currentUser.id).update({
+                        failedPinAttempts: failedPinAttempts
+                    });
+                    
+                    // Clear inputs
+                    pinDigits.forEach(input => {
+                        input.value = '';
+                        input.classList.remove('filled');
+                    });
+                    pinDigits[0].focus();
+                }
             }
         }
         
@@ -1165,6 +1065,9 @@ function showScreen(screenId, addToHistory = true) {
 function showLoading(show) {
     const overlay = document.getElementById('loadingOverlay');
     if (show) {
+function showLoading(show) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (show) {
         overlay.classList.add('show');
     } else {
         overlay.classList.remove('show');
@@ -1186,8 +1089,7 @@ function showError(message, elementId = null) {
 }
 
 function showLockout() {
-    showScreen('passwordScreen');
-    document.getElementById('passwordForm').style.display = 'none';
+    document.getElementById('pinForm').style.display = 'none';
     document.getElementById('lockoutMessage').style.display = 'block';
     
     updateLockoutTimer();
@@ -1201,10 +1103,10 @@ function updateLockoutTimer() {
     const timeLeft = lockoutEndTime - now;
     
     if (timeLeft <= 0) {
-        document.getElementById('passwordForm').style.display = 'block';
+        document.getElementById('pinForm').style.display = 'block';
         document.getElementById('lockoutMessage').style.display = 'none';
         lockoutEndTime = null;
-        failedPasswordAttempts = 0;
+        failedPinAttempts = 0;
     } else {
         const hours = Math.floor(timeLeft / (1000 * 60 * 60));
         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
@@ -1270,7 +1172,7 @@ window.addEventListener('load', async () => {
     const authUser = sessionStorage.getItem('authUser');
     if (authUser) {
         currentUser = JSON.parse(authUser);
-        isAuthenticated = false; // Still require password verification
+        isAuthenticated = false; // Still require PIN verification
     }
     
     // If app is visible (after Ctrl+Shift+Z), initialize

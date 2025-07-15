@@ -181,72 +181,6 @@
             </div>
         </div>
 
-        <!-- Password Screen -->
-        <div id="passwordScreen" class="screen">
-            <div class="password-container">
-                <div class="password-box">
-                    <div class="back-btn" onclick="location.reload()">
-                        <i class="fas fa-arrow-left"></i>
-                    </div>
-                    
-                    <div class="user-info">
-                        <img id="userAvatar" src="" alt="Avatar" class="user-avatar">
-                        <h2 id="userName"></h2>
-                    </div>
-                    
-                    <h3 id="passwordTitle">Wprowadź hasło</h3>
-                    
-                    <form id="passwordForm">
-                        <div class="form-group">
-                            <div class="input-wrapper">
-                                <i class="fas fa-lock input-icon"></i>
-                                <input type="password" id="passwordInput" class="form-input" 
-                                       placeholder="Hasło" required>
-                                <button type="button" class="toggle-password">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="passwordConfirmGroup" class="form-group" style="display: none;">
-                            <div class="input-wrapper">
-                                <i class="fas fa-lock input-icon"></i>
-                                <input type="password" id="passwordConfirm" class="form-input" 
-                                       placeholder="Potwierdź hasło">
-                                <button type="button" class="toggle-password">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="passwordStrength" class="password-strength" style="display: none;">
-                            <div class="strength-bar">
-                                <div class="strength-fill"></div>
-                            </div>
-                            <span class="strength-text">Siła hasła</span>
-                        </div>
-                        
-                        <div id="passwordError" class="error-message"></div>
-                        
-                        <button type="submit" class="submit-btn">
-                            <span>Kontynuuj</span>
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </form>
-                    
-                    <div id="lockoutMessage" class="lockout-message" style="display: none;">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Konto tymczasowo zablokowane</h3>
-                        <p>Ze względów bezpieczeństwa konto zostało zablokowane na 5 godzin.</p>
-                        <div class="lockout-timer">
-                            <span>Pozostało:</span>
-                            <span id="lockoutTime" class="time">00:00:00</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- PIN Screen -->
         <div id="pinScreen" class="screen">
             <div class="pin-container">
@@ -282,7 +216,17 @@
                         
                         <div id="pinError" class="error-message"></div>
                         
-                        <button type="submit" class="submit-btn">
+                        <div id="lockoutMessage" class="lockout-message" style="display: none;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>PIN tymczasowo zablokowany</h3>
+                            <p>Ze względów bezpieczeństwa PIN został zablokowany na 5 godzin.</p>
+                            <div class="lockout-timer">
+                                <span>Pozostało:</span>
+                                <span id="lockoutTime" class="time">00:00:00</span>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="submit-btn" id="pinSubmitBtn">
                             <span>Kontynuuj</span>
                             <i class="fas fa-arrow-right"></i>
                         </button>
@@ -393,7 +337,7 @@
                             <div class="info-card">
                                 <i class="fas fa-shield-alt"></i>
                                 <h3>Potrójne zabezpieczenie</h3>
-                                <p>Hasło + PIN + Reguła</p>
+                                <p>Email + PIN + Reguła</p>
                             </div>
                             <div class="info-card">
                                 <i class="fas fa-lock"></i>
