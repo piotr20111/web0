@@ -25,6 +25,24 @@
             <div class="loader"></div>
         </div>
 
+        <!-- Upload Progress Overlay -->
+        <div id="uploadOverlay" class="upload-overlay">
+            <div class="upload-progress-container">
+                <h3>Przesyłanie pliku</h3>
+                <div class="upload-info">
+                    <span id="uploadFileName"></span>
+                    <span id="uploadStatus">0%</span>
+                </div>
+                <div class="upload-progress-bar">
+                    <div id="uploadProgressFill" class="upload-progress-fill"></div>
+                </div>
+                <div class="upload-speed">
+                    <span id="uploadSpeed">0 MB/s</span>
+                    <span id="uploadTimeLeft">Obliczanie...</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Login Screen -->
         <div id="loginScreen" class="screen active">
             <div class="login-container">
@@ -227,6 +245,11 @@
                             <span>Notatnik</span>
                             <span class="badge">Bezpieczny</span>
                         </a>
+                        <a href="#" class="nav-item" data-section="videos">
+                            <i class="fas fa-film"></i>
+                            <span>Filmy i katalogi</span>
+                            <span class="badge">Nowe</span>
+                        </a>
                     </nav>
                     
                     <div class="sidebar-footer">
@@ -352,6 +375,61 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Videos Section -->
+                    <div id="videosSection" style="display: none;">
+                        <div class="videos-container">
+                            <!-- Folder Browser -->
+                            <div class="folder-browser">
+                                <div class="browser-header">
+                                    <h3>Katalogi</h3>
+                                    <div class="browser-actions">
+                                        <button class="action-btn" onclick="createNewFolder()">
+                                            <i class="fas fa-folder-plus"></i>
+                                        </button>
+                                        <button class="action-btn" onclick="showUploadModal()">
+                                            <i class="fas fa-cloud-upload-alt"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="browser-path">
+                                    <i class="fas fa-home"></i>
+                                    <span id="currentPath">/ Główny</span>
+                                </div>
+                                
+                                <div id="foldersList" class="folders-list"></div>
+                            </div>
+                            
+                            <!-- Video Grid -->
+                            <div class="video-content">
+                                <div class="content-header">
+                                    <h2 id="folderTitle">Wszystkie filmy</h2>
+                                    <div class="view-controls">
+                                        <button class="view-btn active" data-view="grid">
+                                            <i class="fas fa-th"></i>
+                                        </button>
+                                        <button class="view-btn" data-view="list">
+                                            <i class="fas fa-list"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="videosGrid" class="videos-grid"></div>
+                                
+                                <!-- Empty State -->
+                                <div id="emptyState" class="empty-state" style="display: none;">
+                                    <i class="fas fa-film"></i>
+                                    <h3>Brak filmów</h3>
+                                    <p>Wgraj pierwszy film do tego katalogu</p>
+                                    <button class="upload-btn" onclick="showUploadModal()">
+                                        <i class="fas fa-upload"></i>
+                                        <span>Wgraj film</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </main>
             </div>
         </div>
@@ -387,11 +465,107 @@
                 </form>
             </div>
         </div>
+
+        <!-- Video Upload Modal -->
+        <div id="uploadModal" class="modal">
+            <div class="modal-content upload-modal">
+                <div class="modal-header">
+                    <h3>Wgraj film</h3>
+                    <button class="modal-close" onclick="closeUploadModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="upload-area">
+                    <input type="file" id="videoFileInput" accept="video/*" multiple style="display: none;">
+                    
+                    <div class="upload-dropzone" id="uploadDropzone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <h3>Przeciągnij i upuść pliki tutaj</h3>
+                        <p>lub</p>
+                        <button class="browse-btn" onclick="document.getElementById('videoFileInput').click()">
+                            Wybierz pliki
+                        </button>
+                        <small>Obsługiwane formaty: MP4, WebM, MOV, AVI (maks. 5GB)</small>
+                    </div>
+                    
+                    <div id="uploadQueue" class="upload-queue" style="display: none;">
+                        <h4>Kolejka przesyłania</h4>
+                        <div id="uploadQueueList"></div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="cancel-btn" onclick="closeUploadModal()">Anuluj</button>
+                    <button id="startUploadBtn" class="submit-btn" onclick="startUpload()" disabled>
+                        <i class="fas fa-upload"></i>
+                        <span>Rozpocznij przesyłanie</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Player Modal -->
+        <div id="videoPlayerModal" class="modal video-player-modal">
+            <div class="player-container">
+                <div class="player-header">
+                    <h3 id="videoPlayerTitle"></h3>
+                    <button class="modal-close" onclick="closeVideoPlayer()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="video-wrapper">
+                    <video id="videoPlayer" controls controlsList="nodownload">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                
+                <div class="player-info">
+                    <div class="video-details">
+                        <span id="videoSize"></span>
+                        <span>•</span>
+                        <span id="videoDuration"></span>
+                        <span>•</span>
+                        <span id="videoDate"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Folder Modal -->
+        <div id="newFolderModal" class="modal">
+            <div class="modal-content small-modal">
+                <div class="modal-header">
+                    <h3>Nowy folder</h3>
+                    <button class="modal-close" onclick="closeNewFolderModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="newFolderForm">
+                    <div class="form-group">
+                        <label>Nazwa folderu</label>
+                        <input type="text" id="folderNameInput" class="form-input" 
+                               placeholder="Moje filmy" required maxlength="50">
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="cancel-btn" onclick="closeNewFolderModal()">Anuluj</button>
+                        <button type="submit" class="submit-btn">
+                            <i class="fas fa-folder-plus"></i>
+                            <span>Utwórz</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="script.js"></script>
 </body>

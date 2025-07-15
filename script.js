@@ -1,4 +1,4 @@
-// Firebase Configuration - TWOJE DANE
+// Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyC-lBAOsH8UGIIY3n1ntBs9Zn0Sq8K75aY",
     authDomain: "web0-586a2.firebaseapp.com",
@@ -11,8 +11,9 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 
-// Google OAuth Configuration - TWÓJ CLIENT ID
+// Google OAuth Configuration
 const GOOGLE_CLIENT_ID = '172651080134-hpk3392odvase3ro1ko6urgnec5r87nb.apps.googleusercontent.com';
 
 // Global variables
@@ -24,6 +25,49 @@ let lockoutEndTime = null;
 let googleInitialized = false;
 let isAuthenticated = false;
 let navigationHistory = [];
+let currentFolder = null;
+let folders = [];
+let videos = [];
+let uploadQueue = [];
+let currentView = 'grid';
+
+// Disable Developer Tools for Electron
+if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
+    // Disable right-click context menu
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+    
+    // Disable keyboard shortcuts for DevTools
+    document.addEventListener('keydown', (e) => {
+        // F12
+        if (e.key === 'F12') {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+Shift+I (DevTools)
+        if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+Shift+J (Console)
+        if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+Shift+C (Inspect Element)
+        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+U (View Source)
+        if (e.ctrlKey && e.key === 'u') {
+            e.preventDefault();
+            return false;
+        }
+    });
+}
 
 // Security Helper
 const SecurityHelper = {
@@ -84,8 +128,9 @@ function goBack() {
 }
 
 function backToHome() {
-    // Hide notepad section
+    // Hide all sections
     document.getElementById('notepadSection').style.display = 'none';
+    document.getElementById('videosSection').style.display = 'none';
     document.getElementById('homeContent').style.display = 'block';
     document.getElementById('contentNav').style.display = 'none';
     
@@ -109,10 +154,9 @@ function initializeGoogleSignIn() {
             itp_support: true
         });
         
-        // Renderuj przycisk Google
+        // Render Google button
         const buttonDiv = document.getElementById('googleLoginBtn');
         
-        // Renderuj oficjalny przycisk Google
         google.accounts.id.renderButton(
             buttonDiv,
             {
@@ -127,10 +171,10 @@ function initializeGoogleSignIn() {
         );
         
         googleInitialized = true;
-        console.log('Google Sign-In zainicjalizowany pomyślnie');
+        console.log('Google Sign-In initialized successfully');
         
     } catch (error) {
-        console.error('Błąd inicjalizacji Google Sign-In:', error);
+        console.error('Error initializing Google Sign-In:', error);
         showAlternativeLogin();
     }
 }
@@ -148,7 +192,7 @@ function showAlternativeLogin() {
 
 // OAuth redirect method
 function useOAuthRedirect() {
-    console.log('Używam metody OAuth redirect...');
+    console.log('Using OAuth redirect method...');
     
     const redirectUri = window.location.origin + window.location.pathname;
     const state = generateNonce();
@@ -184,7 +228,7 @@ function handleOAuthRedirect() {
         const state = params.get('state');
         
         if (idToken && state === sessionStorage.getItem('oauth_state')) {
-            console.log('Otrzymano token z OAuth redirect');
+            console.log('Received token from OAuth redirect');
             
             sessionStorage.removeItem('oauth_state');
             sessionStorage.removeItem('oauth_nonce');
@@ -198,13 +242,13 @@ function handleOAuthRedirect() {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     } catch (error) {
-        console.error('Błąd obsługi OAuth redirect:', error);
+        console.error('Error handling OAuth redirect:', error);
     }
 }
 
 // Handle Google Sign-In response
 async function handleGoogleSignIn(response) {
-    console.log('Przetwarzanie odpowiedzi logowania...');
+    console.log('Processing login response...');
     showLoading(true);
     
     try {
@@ -218,19 +262,19 @@ async function handleGoogleSignIn(response) {
             picture: credential.picture
         };
         
-        console.log('Zalogowano jako:', currentUser.name);
+        console.log('Logged in as:', currentUser.name);
         console.log('User ID:', currentUser.id);
         
         // Store authentication state
         sessionStorage.setItem('authUser', JSON.stringify(currentUser));
         
-        // Test połączenia z Firestore
+        // Test Firestore connection
         try {
             const userRef = db.collection('users').doc(currentUser.id);
             const userDoc = await userRef.get();
             
             if (!userDoc.exists) {
-                console.log('Tworzę nowego użytkownika...');
+                console.log('Creating new user...');
                 // New user - create document first
                 await userRef.set({
                     email: currentUser.email,
@@ -245,7 +289,7 @@ async function handleGoogleSignIn(response) {
                 document.getElementById('passwordConfirmGroup').style.display = 'block';
                 document.getElementById('passwordStrength').style.display = 'block';
             } else {
-                console.log('Użytkownik istnieje, sprawdzam dane...');
+                console.log('User exists, checking data...');
                 // Existing user - check lockout
                 const userData = userDoc.data();
                 
@@ -261,6 +305,7 @@ async function handleGoogleSignIn(response) {
                         // Go directly to main panel
                         showScreen('mainPanel');
                         loadNotes();
+                        loadFolders();
                     } else {
                         // Show password entry
                         showScreen('passwordScreen');
@@ -275,7 +320,7 @@ async function handleGoogleSignIn(response) {
             updateUserInfo();
             
         } catch (firestoreError) {
-            console.error('Błąd Firestore:', firestoreError);
+            console.error('Firestore error:', firestoreError);
             
             if (firestoreError.code === 'permission-denied') {
                 alert('Błąd uprawnień! Sprawdź reguły Firestore w Firebase Console.\n\n' +
@@ -292,7 +337,7 @@ async function handleGoogleSignIn(response) {
         }
         
     } catch (error) {
-        console.error('Błąd logowania:', error);
+        console.error('Login error:', error);
         showError('Błąd logowania. Spróbuj ponownie.');
         showScreen('loginScreen');
     } finally {
@@ -310,7 +355,7 @@ function parseJwt(token) {
         }).join(''));
         return JSON.parse(jsonPayload);
     } catch (error) {
-        console.error('Błąd parsowania tokenu:', error);
+        console.error('Error parsing token:', error);
         throw new Error('Invalid token');
     }
 }
@@ -562,6 +607,7 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
                 isAuthenticated = true;
                 showScreen('mainPanel');
                 loadNotes();
+                loadFolders();
             }
             
         } else {
@@ -683,6 +729,7 @@ document.getElementById('ruleForm').addEventListener('submit', async (e) => {
             isAuthenticated = true;
             showScreen('mainPanel');
             loadNotes();
+            loadFolders();
             
         } else {
             // Verify existing rule
@@ -695,6 +742,7 @@ document.getElementById('ruleForm').addEventListener('submit', async (e) => {
                 isAuthenticated = true;
                 showScreen('mainPanel');
                 loadNotes();
+                loadFolders();
             } else {
                 showError('Nieprawidłowa reguła', 'ruleError');
                 
@@ -727,6 +775,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
             document.getElementById('pinModal').classList.add('show');
             document.getElementById('accessCode').value = '';
             document.getElementById('accessCode').focus();
+        } else if (section === 'videos') {
+            // Show videos section
+            showVideosSection();
         }
     });
 });
@@ -778,6 +829,529 @@ document.getElementById('accessForm').addEventListener('submit', async (e) => {
         showLoading(false);
     }
 });
+
+// Videos Section Functions
+function showVideosSection() {
+    document.getElementById('homeContent').style.display = 'none';
+    document.getElementById('notepadSection').style.display = 'none';
+    document.getElementById('videosSection').style.display = 'block';
+    document.getElementById('contentNav').style.display = 'block';
+    
+    // Update nav items
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    document.querySelector('[data-section="videos"]').classList.add('active');
+    
+    // Load videos if not loaded
+    if (videos.length === 0) {
+        loadVideos();
+    }
+}
+
+// Load folders
+async function loadFolders() {
+    try {
+        const foldersSnapshot = await db.collection('users').doc(currentUser.id)
+            .collection('folders').orderBy('name').get();
+        
+        folders = [];
+        foldersSnapshot.forEach(doc => {
+            folders.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // Add default "All Videos" folder
+        folders.unshift({
+            id: 'all',
+            name: 'Wszystkie filmy',
+            videoCount: 0,
+            isDefault: true
+        });
+        
+        renderFoldersList();
+        
+    } catch (error) {
+        console.error('Error loading folders:', error);
+    }
+}
+
+// Render folders list
+function renderFoldersList() {
+    const foldersList = document.getElementById('foldersList');
+    foldersList.innerHTML = '';
+    
+    folders.forEach(folder => {
+        const folderItem = document.createElement('div');
+        folderItem.className = 'folder-item';
+        if (currentFolder && currentFolder.id === folder.id) {
+            folderItem.classList.add('active');
+        }
+        
+        folderItem.innerHTML = `
+            <i class="fas fa-folder${folder.isDefault ? '' : '-open'} folder-icon"></i>
+            <div class="folder-info">
+                <div class="folder-name">${folder.name}</div>
+                <div class="folder-count">${folder.videoCount || 0} ${folder.videoCount === 1 ? 'film' : 'filmów'}</div>
+            </div>
+        `;
+        
+        folderItem.addEventListener('click', () => selectFolder(folder));
+        foldersList.appendChild(folderItem);
+    });
+}
+
+// Select folder
+function selectFolder(folder) {
+    currentFolder = folder;
+    renderFoldersList();
+    
+    document.getElementById('folderTitle').textContent = folder.name;
+    document.getElementById('currentPath').textContent = `/ ${folder.name}`;
+    
+    loadVideos(folder.id === 'all' ? null : folder.id);
+}
+
+// Load videos
+async function loadVideos(folderId = null) {
+    try {
+        showLoading(true);
+        
+        let query = db.collection('users').doc(currentUser.id).collection('videos');
+        
+        if (folderId) {
+            query = query.where('folderId', '==', folderId);
+        }
+        
+        const videosSnapshot = await query.orderBy('uploadedAt', 'desc').get();
+        
+        videos = [];
+        videosSnapshot.forEach(doc => {
+            videos.push({ id: doc.id, ...doc.data() });
+        });
+        
+        renderVideos();
+        
+        // Update folder counts
+        updateFolderCounts();
+        
+    } catch (error) {
+        console.error('Error loading videos:', error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Update folder video counts
+async function updateFolderCounts() {
+    const counts = {};
+    videos.forEach(video => {
+        const folderId = video.folderId || 'all';
+        counts[folderId] = (counts[folderId] || 0) + 1;
+    });
+    
+    folders.forEach(folder => {
+        if (folder.id === 'all') {
+            folder.videoCount = videos.length;
+        } else {
+            folder.videoCount = counts[folder.id] || 0;
+        }
+    });
+    
+    renderFoldersList();
+}
+
+// Render videos
+function renderVideos() {
+    const videosGrid = document.getElementById('videosGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (videos.length === 0) {
+        videosGrid.style.display = 'none';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    videosGrid.style.display = '';
+    emptyState.style.display = 'none';
+    
+    videosGrid.innerHTML = '';
+    videosGrid.className = currentView === 'list' ? 'videos-grid list-view' : 'videos-grid';
+    
+    videos.forEach(video => {
+        const videoCard = createVideoCard(video);
+        videosGrid.appendChild(videoCard);
+    });
+}
+
+// Create video card
+function createVideoCard(video) {
+    const card = document.createElement('div');
+    card.className = currentView === 'list' ? 'video-card list-item' : 'video-card';
+    
+    const duration = formatDuration(video.duration);
+    const uploadDate = new Date(video.uploadedAt).toLocaleDateString('pl-PL');
+    const fileSize = formatFileSize(video.size);
+    
+    card.innerHTML = `
+        <div class="video-thumbnail">
+            <img src="${video.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgdmlld0JveD0iMCAwIDQwMCAyMjUiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjI1IiBmaWxsPSIjMjUyNTI1Ii8+CjxwYXRoIGQ9Ik0xNzUgMTUwVjc1TDI1MCAxMTIuNUwxNzUgMTUwWiIgZmlsbD0iIzY2NjY2NiIvPgo8L3N2Zz4='}" alt="${video.title}">
+            <span class="video-duration">${duration}</span>
+        </div>
+        <div class="video-info">
+            <div class="video-title">${video.title}</div>
+            <div class="video-meta">
+                <span>${fileSize}</span>
+                <span>${uploadDate}</span>
+            </div>
+        </div>
+    `;
+    
+    card.addEventListener('click', () => playVideo(video));
+    return card;
+}
+
+// Play video
+function playVideo(video) {
+    const modal = document.getElementById('videoPlayerModal');
+    const player = document.getElementById('videoPlayer');
+    
+    document.getElementById('videoPlayerTitle').textContent = video.title;
+    document.getElementById('videoSize').textContent = formatFileSize(video.size);
+    document.getElementById('videoDuration').textContent = formatDuration(video.duration);
+    document.getElementById('videoDate').textContent = new Date(video.uploadedAt).toLocaleString('pl-PL');
+    
+    player.src = video.url;
+    modal.classList.add('show');
+    
+    // Play video
+    player.play().catch(err => console.error('Error playing video:', err));
+}
+
+// Close video player
+function closeVideoPlayer() {
+    const modal = document.getElementById('videoPlayerModal');
+    const player = document.getElementById('videoPlayer');
+    
+    player.pause();
+    player.src = '';
+    modal.classList.remove('show');
+}
+
+// View controls
+document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentView = btn.dataset.view;
+        renderVideos();
+    });
+});
+
+// Upload Modal Functions
+function showUploadModal() {
+    document.getElementById('uploadModal').classList.add('show');
+    uploadQueue = [];
+    renderUploadQueue();
+}
+
+function closeUploadModal() {
+    document.getElementById('uploadModal').classList.remove('show');
+    document.getElementById('videoFileInput').value = '';
+    uploadQueue = [];
+    renderUploadQueue();
+}
+
+// File input handling
+document.getElementById('videoFileInput').addEventListener('change', (e) => {
+    handleFileSelect(e.target.files);
+});
+
+// Drag and drop
+const dropzone = document.getElementById('uploadDropzone');
+
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('drag-over');
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('drag-over');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    handleFileSelect(e.dataTransfer.files);
+});
+
+// Handle file selection
+function handleFileSelect(files) {
+    const videoFiles = Array.from(files).filter(file => {
+        return file.type.startsWith('video/') && file.size <= 5 * 1024 * 1024 * 1024; // 5GB limit
+    });
+    
+    if (videoFiles.length === 0) {
+        showError('Wybierz pliki wideo (maks. 5GB)');
+        return;
+    }
+    
+    videoFiles.forEach(file => {
+        if (!uploadQueue.find(f => f.name === file.name)) {
+            uploadQueue.push(file);
+        }
+    });
+    
+    renderUploadQueue();
+}
+
+// Render upload queue
+function renderUploadQueue() {
+    const queueContainer = document.getElementById('uploadQueue');
+    const queueList = document.getElementById('uploadQueueList');
+    const startBtn = document.getElementById('startUploadBtn');
+    
+    if (uploadQueue.length === 0) {
+        queueContainer.style.display = 'none';
+        startBtn.disabled = true;
+        return;
+    }
+    
+    queueContainer.style.display = 'block';
+    startBtn.disabled = false;
+    
+    queueList.innerHTML = '';
+    
+    uploadQueue.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'upload-queue-item';
+        
+        item.innerHTML = `
+            <div class="file-icon">
+                <i class="fas fa-film"></i>
+            </div>
+            <div class="file-info">
+                <div class="file-name">${file.name}</div>
+                <div class="file-size">${formatFileSize(file.size)}</div>
+            </div>
+            <button class="remove-file" onclick="removeFromQueue(${index})">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        
+        queueList.appendChild(item);
+    });
+}
+
+// Remove from queue
+function removeFromQueue(index) {
+    uploadQueue.splice(index, 1);
+    renderUploadQueue();
+}
+
+// Start upload
+async function startUpload() {
+    if (uploadQueue.length === 0) return;
+    
+    closeUploadModal();
+    
+    for (let i = 0; i < uploadQueue.length; i++) {
+        const file = uploadQueue[i];
+        await uploadVideo(file);
+    }
+    
+    // Reload videos
+    loadVideos(currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null);
+}
+
+// Upload video
+async function uploadVideo(file) {
+    const uploadOverlay = document.getElementById('uploadOverlay');
+    const progressFill = document.getElementById('uploadProgressFill');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const uploadSpeed = document.getElementById('uploadSpeed');
+    const uploadTimeLeft = document.getElementById('uploadTimeLeft');
+    
+    uploadOverlay.classList.add('show');
+    document.getElementById('uploadFileName').textContent = file.name;
+    
+    try {
+        // Create storage reference
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_${file.name}`;
+        const storageRef = storage.ref(`videos/${currentUser.id}/${fileName}`);
+        
+        // Start upload
+        const uploadTask = storageRef.put(file);
+        
+        let startTime = Date.now();
+        let lastLoaded = 0;
+        
+        // Monitor upload progress
+        uploadTask.on('state_changed', 
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                progressFill.style.width = progress + '%';
+                uploadStatus.textContent = Math.round(progress) + '%';
+                
+                // Calculate speed
+                const currentTime = Date.now();
+                const elapsedTime = (currentTime - startTime) / 1000; // seconds
+                const bytesPerSecond = (snapshot.bytesTransferred - lastLoaded) / elapsedTime;
+                const mbPerSecond = bytesPerSecond / (1024 * 1024);
+                uploadSpeed.textContent = mbPerSecond.toFixed(1) + ' MB/s';
+                
+                // Calculate time left
+                const bytesRemaining = snapshot.totalBytes - snapshot.bytesTransferred;
+                const secondsRemaining = bytesRemaining / bytesPerSecond;
+                const minutesRemaining = Math.ceil(secondsRemaining / 60);
+                uploadTimeLeft.textContent = minutesRemaining > 1 ? `${minutesRemaining} min` : 'Kończenie...';
+                
+                lastLoaded = snapshot.bytesTransferred;
+                startTime = currentTime;
+            },
+            (error) => {
+                console.error('Upload error:', error);
+                uploadOverlay.classList.remove('show');
+                showError('Błąd przesyłania: ' + error.message);
+            },
+            async () => {
+                // Upload completed
+                const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                
+                // Generate thumbnail (placeholder for now)
+                const thumbnail = await generateVideoThumbnail(file);
+                
+                // Save to Firestore
+                const videoData = SecurityHelper.addSecurityFields({
+                    title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
+                    fileName: file.name,
+                    size: file.size,
+                    type: file.type,
+                    url: downloadURL,
+                    thumbnail: thumbnail,
+                    duration: 0, // Will be updated when video loads
+                    folderId: currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null,
+                    uploadedAt: new Date().toISOString()
+                });
+                
+                await db.collection('users').doc(currentUser.id)
+                    .collection('videos').add(videoData);
+                
+                uploadOverlay.classList.remove('show');
+            }
+        );
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        uploadOverlay.classList.remove('show');
+        showError('Błąd przesyłania pliku');
+    }
+}
+
+// Generate video thumbnail
+async function generateVideoThumbnail(file) {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        video.addEventListener('loadedmetadata', () => {
+            video.currentTime = video.duration / 4; // Get frame at 25% of video
+        });
+        
+        video.addEventListener('seeked', () => {
+            canvas.width = 400;
+            canvas.height = 225;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        resolve(reader.result);
+                    };
+                    reader.readAsDataURL(blob);
+                } else {
+                    resolve(null);
+                }
+            }, 'image/jpeg', 0.7);
+        });
+        
+        video.src = URL.createObjectURL(file);
+        
+        // Timeout fallback
+        setTimeout(() => {
+            resolve(null);
+        }, 5000);
+    });
+}
+
+// Create new folder
+function createNewFolder() {
+    document.getElementById('newFolderModal').classList.add('show');
+    document.getElementById('folderNameInput').value = '';
+    document.getElementById('folderNameInput').focus();
+}
+
+function closeNewFolderModal() {
+    document.getElementById('newFolderModal').classList.remove('show');
+}
+
+// New folder form
+document.getElementById('newFolderForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const folderName = document.getElementById('folderNameInput').value.trim();
+    
+    if (!folderName) {
+        showError('Wprowadź nazwę folderu');
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        const folderData = SecurityHelper.addSecurityFields({
+            name: folderName,
+            createdAt: new Date().toISOString(),
+            videoCount: 0
+        });
+        
+        await db.collection('users').doc(currentUser.id)
+            .collection('folders').add(folderData);
+        
+        closeNewFolderModal();
+        loadFolders();
+        
+    } catch (error) {
+        console.error('Error creating folder:', error);
+        showError('Nie udało się utworzyć folderu');
+    } finally {
+        showLoading(false);
+    }
+});
+
+// Format helpers
+function formatDuration(seconds) {
+    if (!seconds) return '0:00';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 // Notepad functions
 function showNotepad() {
@@ -1001,11 +1575,6 @@ async function toggleStar() {
 }
 
 // Search notes
-function searchNotes() {
-    const searchInput = document.getElementById('searchInput');
-    searchInput.focus();
-}
-
 document.getElementById('searchInput').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     
@@ -1131,6 +1700,8 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
         currentUser = null;
         currentNote = null;
         notes = [];
+        videos = [];
+        folders = [];
         isAuthenticated = false;
         sessionStorage.clear();
         
@@ -1251,34 +1822,6 @@ async function hashPassword(password) {
 async function verifyPassword(password, hash) {
     const passwordHash = await hashPassword(password);
     return passwordHash === hash;
-}
-
-// Test Firestore connection
-async function testFirestoreConnection() {
-    try {
-        console.log('Testuję połączenie z Firestore...');
-        
-        // Spróbuj utworzyć testowy dokument
-        const testDoc = await db.collection('test').add({
-            timestamp: new Date().toISOString(),
-            test: true
-        });
-        
-        console.log('✅ Połączenie z Firestore działa!', testDoc.id);
-        
-        // Usuń testowy dokument
-        await db.collection('test').doc(testDoc.id).delete();
-        
-        return true;
-    } catch (error) {
-        console.error('❌ Błąd połączenia z Firestore:', error);
-        
-        if (error.code === 'permission-denied') {
-            console.error('Błąd uprawnień - sprawdź reguły w Firebase Console');
-        }
-        
-        return false;
-    }
 }
 
 // Check if returning user
