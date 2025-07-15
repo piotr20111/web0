@@ -31,43 +31,90 @@ let videos = [];
 let uploadQueue = [];
 let currentView = 'grid';
 
-// Disable Developer Tools for Electron
-if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
-    // Disable right-click context menu
-    document.addEventListener('contextmenu', (e) => {
+// Disable Developer Tools EVERYWHERE
+// Disable right-click context menu
+document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    return false;
+});
+
+// Disable keyboard shortcuts for DevTools
+document.addEventListener('keydown', (e) => {
+    // F12
+    if (e.key === 'F12') {
         e.preventDefault();
         return false;
-    });
-    
-    // Disable keyboard shortcuts for DevTools
-    document.addEventListener('keydown', (e) => {
-        // F12
-        if (e.key === 'F12') {
-            e.preventDefault();
-            return false;
+    }
+    // Ctrl+Shift+I (DevTools)
+    if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+    }
+    // Ctrl+Shift+J (Console)
+    if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        return false;
+    }
+    // Ctrl+Shift+C (Inspect Element)
+    if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        return false;
+    }
+    // Ctrl+U (View Source)
+    if (e.ctrlKey && e.key === 'u') {
+        e.preventDefault();
+        return false;
+    }
+    // F11 (Fullscreen can be used to access DevTools)
+    if (e.key === 'F11') {
+        e.preventDefault();
+        return false;
+    }
+    // Ctrl+S (Save page)
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        return false;
+    }
+});
+
+// Detect DevTools open
+let devtools = {open: false, orientation: null};
+const threshold = 160;
+setInterval(() => {
+    if (window.outerHeight - window.innerHeight > threshold || 
+        window.outerWidth - window.innerWidth > threshold) {
+        if (!devtools.open) {
+            devtools.open = true;
+            console.clear();
+            document.body.innerHTML = '<h1 style="text-align:center; margin-top:50px;">Nieautoryzowany dostęp!</h1>';
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
         }
-        // Ctrl+Shift+I (DevTools)
-        if (e.ctrlKey && e.shiftKey && e.key === 'I') {
-            e.preventDefault();
-            return false;
-        }
-        // Ctrl+Shift+J (Console)
-        if (e.ctrlKey && e.shiftKey && e.key === 'J') {
-            e.preventDefault();
-            return false;
-        }
-        // Ctrl+Shift+C (Inspect Element)
-        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-            e.preventDefault();
-            return false;
-        }
-        // Ctrl+U (View Source)
-        if (e.ctrlKey && e.key === 'u') {
-            e.preventDefault();
-            return false;
-        }
-    });
-}
+    } else {
+        devtools.open = false;
+    }
+}, 500);
+
+// Console protection
+const consoleError = console.error;
+const consoleLog = console.log;
+const consoleWarn = console.warn;
+
+console.log = function() {
+    consoleLog.apply(console, arguments);
+    console.clear();
+};
+
+console.error = function() {
+    consoleError.apply(console, arguments);
+    console.clear();
+};
+
+console.warn = function() {
+    consoleWarn.apply(console, arguments);
+    console.clear();
+};
 
 // Security Helper
 const SecurityHelper = {
@@ -171,10 +218,10 @@ function initializeGoogleSignIn() {
         );
         
         googleInitialized = true;
-        console.log('Google Sign-In initialized successfully');
+        consoleLog('Google Sign-In initialized successfully');
         
     } catch (error) {
-        console.error('Error initializing Google Sign-In:', error);
+        consoleError('Error initializing Google Sign-In:', error);
         showAlternativeLogin();
     }
 }
@@ -192,7 +239,7 @@ function showAlternativeLogin() {
 
 // OAuth redirect method
 function useOAuthRedirect() {
-    console.log('Using OAuth redirect method...');
+    consoleLog('Using OAuth redirect method...');
     
     const redirectUri = window.location.origin + window.location.pathname;
     const state = generateNonce();
@@ -228,7 +275,7 @@ function handleOAuthRedirect() {
         const state = params.get('state');
         
         if (idToken && state === sessionStorage.getItem('oauth_state')) {
-            console.log('Received token from OAuth redirect');
+            consoleLog('Received token from OAuth redirect');
             
             sessionStorage.removeItem('oauth_state');
             sessionStorage.removeItem('oauth_nonce');
@@ -242,13 +289,13 @@ function handleOAuthRedirect() {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     } catch (error) {
-        console.error('Error handling OAuth redirect:', error);
+        consoleError('Error handling OAuth redirect:', error);
     }
 }
 
 // Handle Google Sign-In response
 async function handleGoogleSignIn(response) {
-    console.log('Processing login response...');
+    consoleLog('Processing login response...');
     showLoading(true);
     
     try {
@@ -262,8 +309,8 @@ async function handleGoogleSignIn(response) {
             picture: credential.picture
         };
         
-        console.log('Logged in as:', currentUser.name);
-        console.log('User ID:', currentUser.id);
+        consoleLog('Logged in as:', currentUser.name);
+        consoleLog('User ID:', currentUser.id);
         
         // Store authentication state
         sessionStorage.setItem('authUser', JSON.stringify(currentUser));
@@ -274,7 +321,7 @@ async function handleGoogleSignIn(response) {
             const userDoc = await userRef.get();
             
             if (!userDoc.exists) {
-                console.log('Creating new user...');
+                consoleLog('Creating new user...');
                 // New user - create document first
                 await userRef.set({
                     email: currentUser.email,
@@ -289,7 +336,7 @@ async function handleGoogleSignIn(response) {
                 document.getElementById('passwordConfirmGroup').style.display = 'block';
                 document.getElementById('passwordStrength').style.display = 'block';
             } else {
-                console.log('User exists, checking data...');
+                consoleLog('User exists, checking data...');
                 // Existing user - check lockout
                 const userData = userDoc.data();
                 
@@ -320,7 +367,7 @@ async function handleGoogleSignIn(response) {
             updateUserInfo();
             
         } catch (firestoreError) {
-            console.error('Firestore error:', firestoreError);
+            consoleError('Firestore error:', firestoreError);
             
             if (firestoreError.code === 'permission-denied') {
                 alert('Błąd uprawnień! Sprawdź reguły Firestore w Firebase Console.\n\n' +
@@ -337,7 +384,7 @@ async function handleGoogleSignIn(response) {
         }
         
     } catch (error) {
-        console.error('Login error:', error);
+        consoleError('Login error:', error);
         showError('Błąd logowania. Spróbuj ponownie.');
         showScreen('loginScreen');
     } finally {
@@ -355,7 +402,7 @@ function parseJwt(token) {
         }).join(''));
         return JSON.parse(jsonPayload);
     } catch (error) {
-        console.error('Error parsing token:', error);
+        consoleError('Error parsing token:', error);
         throw new Error('Invalid token');
     }
 }
@@ -468,7 +515,7 @@ document.getElementById('passwordForm').addEventListener('submit', async (e) => 
         }
         
     } catch (error) {
-        console.error('Password error:', error);
+        consoleError('Password error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'passwordError');
     } finally {
         showLoading(false);
@@ -641,7 +688,7 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
         }
         
     } catch (error) {
-        console.error('PIN error:', error);
+        consoleError('PIN error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'pinError');
     } finally {
         showLoading(false);
@@ -754,7 +801,7 @@ document.getElementById('ruleForm').addEventListener('submit', async (e) => {
         }
         
     } catch (error) {
-        console.error('Rule error:', error);
+        consoleError('Rule error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'ruleError');
     } finally {
         showLoading(false);
@@ -770,14 +817,13 @@ document.querySelectorAll('.nav-item').forEach(item => {
         
         if (section === 'home') {
             backToHome();
-        } else if (section === 'notepad') {
-            // Show PIN modal
+        } else if (section === 'notepad' || section === 'videos') {
+            // Both notepad and videos require PIN modal
             document.getElementById('pinModal').classList.add('show');
             document.getElementById('accessCode').value = '';
             document.getElementById('accessCode').focus();
-        } else if (section === 'videos') {
-            // Show videos section
-            showVideosSection();
+            // Store which section to open after authentication
+            document.getElementById('pinModal').dataset.targetSection = section;
         }
     });
 });
@@ -817,13 +863,19 @@ document.getElementById('accessForm').addEventListener('submit', async (e) => {
         
         if (isPinValid && isRuleValid) {
             closePinModal();
-            showNotepad();
+            // Check which section to open
+            const targetSection = document.getElementById('pinModal').dataset.targetSection;
+            if (targetSection === 'notepad') {
+                showNotepad();
+            } else if (targetSection === 'videos') {
+                showVideosSection();
+            }
         } else {
             showError('Nieprawidłowy kod dostępu', 'accessError');
         }
         
     } catch (error) {
-        console.error('Access error:', error);
+        consoleError('Access error:', error);
         showError('Wystąpił błąd. Spróbuj ponownie.', 'accessError');
     } finally {
         showLoading(false);
@@ -842,9 +894,7 @@ function showVideosSection() {
     document.querySelector('[data-section="videos"]').classList.add('active');
     
     // Load videos if not loaded
-    if (videos.length === 0) {
-        loadVideos();
-    }
+    loadVideos();
 }
 
 // Load folders
@@ -868,8 +918,13 @@ async function loadFolders() {
         
         renderFoldersList();
         
+        // Select first folder by default
+        if (!currentFolder && folders.length > 0) {
+            selectFolder(folders[0]);
+        }
+        
     } catch (error) {
-        console.error('Error loading folders:', error);
+        consoleError('Error loading folders:', error);
     }
 }
 
@@ -933,7 +988,32 @@ async function loadVideos(folderId = null) {
         updateFolderCounts();
         
     } catch (error) {
-        console.error('Error loading videos:', error);
+        consoleError('Error loading videos:', error);
+        // If error is because index doesn't exist, try without orderBy
+        if (error.code === 'failed-precondition') {
+            try {
+                let query = db.collection('users').doc(currentUser.id).collection('videos');
+                
+                if (folderId) {
+                    query = query.where('folderId', '==', folderId);
+                }
+                
+                const videosSnapshot = await query.get();
+                
+                videos = [];
+                videosSnapshot.forEach(doc => {
+                    videos.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Sort locally
+                videos.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+                
+                renderVideos();
+                updateFolderCounts();
+            } catch (retryError) {
+                consoleError('Retry error:', retryError);
+            }
+        }
     } finally {
         showLoading(false);
     }
@@ -1022,7 +1102,7 @@ function playVideo(video) {
     modal.classList.add('show');
     
     // Play video
-    player.play().catch(err => console.error('Error playing video:', err));
+    player.play().catch(err => consoleError('Error playing video:', err));
 }
 
 // Close video player
@@ -1161,7 +1241,7 @@ async function startUpload() {
     loadVideos(currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null);
 }
 
-// Upload video
+// Upload video with proper error handling
 async function uploadVideo(file) {
     const uploadOverlay = document.getElementById('uploadOverlay');
     const progressFill = document.getElementById('uploadProgressFill');
@@ -1173,77 +1253,144 @@ async function uploadVideo(file) {
     document.getElementById('uploadFileName').textContent = file.name;
     
     try {
-        // Create storage reference
+        // Create unique file name
         const timestamp = Date.now();
-        const fileName = `${timestamp}_${file.name}`;
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${timestamp}_${sanitizedFileName}`;
         const storageRef = storage.ref(`videos/${currentUser.id}/${fileName}`);
         
-        // Start upload
-        const uploadTask = storageRef.put(file);
+        // Create upload task
+        const uploadTask = storageRef.put(file, {
+            contentType: file.type,
+            customMetadata: {
+                'uploadedBy': currentUser.email,
+                'originalName': file.name
+            }
+        });
         
         let startTime = Date.now();
-        let lastLoaded = 0;
+        let lastBytes = 0;
         
-        // Monitor upload progress
-        uploadTask.on('state_changed', 
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                progressFill.style.width = progress + '%';
-                uploadStatus.textContent = Math.round(progress) + '%';
-                
-                // Calculate speed
-                const currentTime = Date.now();
-                const elapsedTime = (currentTime - startTime) / 1000; // seconds
-                const bytesPerSecond = (snapshot.bytesTransferred - lastLoaded) / elapsedTime;
-                const mbPerSecond = bytesPerSecond / (1024 * 1024);
-                uploadSpeed.textContent = mbPerSecond.toFixed(1) + ' MB/s';
-                
-                // Calculate time left
-                const bytesRemaining = snapshot.totalBytes - snapshot.bytesTransferred;
-                const secondsRemaining = bytesRemaining / bytesPerSecond;
-                const minutesRemaining = Math.ceil(secondsRemaining / 60);
-                uploadTimeLeft.textContent = minutesRemaining > 1 ? `${minutesRemaining} min` : 'Kończenie...';
-                
-                lastLoaded = snapshot.bytesTransferred;
-                startTime = currentTime;
-            },
-            (error) => {
-                console.error('Upload error:', error);
-                uploadOverlay.classList.remove('show');
-                showError('Błąd przesyłania: ' + error.message);
-            },
-            async () => {
-                // Upload completed
-                const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-                
-                // Generate thumbnail (placeholder for now)
-                const thumbnail = await generateVideoThumbnail(file);
-                
-                // Save to Firestore
-                const videoData = SecurityHelper.addSecurityFields({
-                    title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-                    fileName: file.name,
-                    size: file.size,
-                    type: file.type,
-                    url: downloadURL,
-                    thumbnail: thumbnail,
-                    duration: 0, // Will be updated when video loads
-                    folderId: currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null,
-                    uploadedAt: new Date().toISOString()
-                });
-                
-                await db.collection('users').doc(currentUser.id)
-                    .collection('videos').add(videoData);
-                
-                uploadOverlay.classList.remove('show');
-            }
-        );
+        // Return promise to handle upload
+        return new Promise((resolve, reject) => {
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    // Progress
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    progressFill.style.width = progress + '%';
+                    uploadStatus.textContent = Math.round(progress) + '%';
+                    
+                    // Calculate speed
+                    const currentTime = Date.now();
+                    const elapsedSeconds = (currentTime - startTime) / 1000;
+                    const bytesTransferred = snapshot.bytesTransferred - lastBytes;
+                    const bytesPerSecond = bytesTransferred / elapsedSeconds;
+                    const mbPerSecond = (bytesPerSecond / (1024 * 1024)).toFixed(1);
+                    uploadSpeed.textContent = mbPerSecond + ' MB/s';
+                    
+                    // Calculate time remaining
+                    const bytesRemaining = snapshot.totalBytes - snapshot.bytesTransferred;
+                    const secondsRemaining = Math.ceil(bytesRemaining / bytesPerSecond);
+                    const minutesRemaining = Math.ceil(secondsRemaining / 60);
+                    
+                    if (minutesRemaining > 1) {
+                        uploadTimeLeft.textContent = `${minutesRemaining} min`;
+                    } else {
+                        uploadTimeLeft.textContent = `${secondsRemaining} sek`;
+                    }
+                    
+                    lastBytes = snapshot.bytesTransferred;
+                    startTime = currentTime;
+                },
+                (error) => {
+                    // Error
+                    consoleError('Upload error:', error);
+                    uploadOverlay.classList.remove('show');
+                    
+                    let errorMessage = 'Błąd przesyłania: ';
+                    switch (error.code) {
+                        case 'storage/unauthorized':
+                            errorMessage += 'Brak uprawnień do przesyłania';
+                            break;
+                        case 'storage/canceled':
+                            errorMessage += 'Przesyłanie anulowane';
+                            break;
+                        case 'storage/unknown':
+                            errorMessage += 'Nieznany błąd';
+                            break;
+                        default:
+                            errorMessage += error.message;
+                    }
+                    
+                    showError(errorMessage);
+                    reject(error);
+                },
+                async () => {
+                    // Complete
+                    try {
+                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                        
+                        // Get video duration
+                        const duration = await getVideoDuration(file);
+                        
+                        // Generate thumbnail
+                        const thumbnail = await generateVideoThumbnail(file);
+                        
+                        // Save to Firestore
+                        const videoData = SecurityHelper.addSecurityFields({
+                            title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
+                            fileName: file.name,
+                            storagePath: `videos/${currentUser.id}/${fileName}`,
+                            size: file.size,
+                            type: file.type,
+                            url: downloadURL,
+                            thumbnail: thumbnail,
+                            duration: duration,
+                            folderId: currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null,
+                            uploadedAt: new Date().toISOString()
+                        });
+                        
+                        await db.collection('users').doc(currentUser.id)
+                            .collection('videos').add(videoData);
+                        
+                        uploadOverlay.classList.remove('show');
+                        resolve();
+                        
+                    } catch (saveError) {
+                        consoleError('Error saving video data:', saveError);
+                        uploadOverlay.classList.remove('show');
+                        showError('Film został przesłany, ale wystąpił błąd zapisu danych');
+                        reject(saveError);
+                    }
+                }
+            );
+        });
         
     } catch (error) {
-        console.error('Upload error:', error);
+        consoleError('Upload initialization error:', error);
         uploadOverlay.classList.remove('show');
-        showError('Błąd przesyłania pliku');
+        showError('Nie można rozpocząć przesyłania');
+        throw error;
     }
+}
+
+// Get video duration
+async function getVideoDuration(file) {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        
+        video.onloadedmetadata = function() {
+            window.URL.revokeObjectURL(video.src);
+            resolve(video.duration);
+        };
+        
+        video.onerror = function() {
+            resolve(0);
+        };
+        
+        video.src = URL.createObjectURL(file);
+    });
 }
 
 // Generate video thumbnail
@@ -1254,25 +1401,37 @@ async function generateVideoThumbnail(file) {
         const ctx = canvas.getContext('2d');
         
         video.addEventListener('loadedmetadata', () => {
-            video.currentTime = video.duration / 4; // Get frame at 25% of video
+            // Seek to 10% of video duration for better thumbnail
+            video.currentTime = video.duration * 0.1;
         });
         
         video.addEventListener('seeked', () => {
+            // Set canvas size
             canvas.width = 400;
-            canvas.height = 225;
+            canvas.height = 225; // 16:9 aspect ratio
+            
+            // Draw video frame to canvas
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
+            // Convert to data URL
             canvas.toBlob((blob) => {
                 if (blob) {
                     const reader = new FileReader();
                     reader.onloadend = () => {
+                        window.URL.revokeObjectURL(video.src);
                         resolve(reader.result);
                     };
                     reader.readAsDataURL(blob);
                 } else {
+                    window.URL.revokeObjectURL(video.src);
                     resolve(null);
                 }
-            }, 'image/jpeg', 0.7);
+            }, 'image/jpeg', 0.8);
+        });
+        
+        video.addEventListener('error', () => {
+            window.URL.revokeObjectURL(video.src);
+            resolve(null);
         });
         
         video.src = URL.createObjectURL(file);
@@ -1280,7 +1439,7 @@ async function generateVideoThumbnail(file) {
         // Timeout fallback
         setTimeout(() => {
             resolve(null);
-        }, 5000);
+        }, 10000);
     });
 }
 
@@ -1322,7 +1481,7 @@ document.getElementById('newFolderForm').addEventListener('submit', async (e) =>
         loadFolders();
         
     } catch (error) {
-        console.error('Error creating folder:', error);
+        consoleError('Error creating folder:', error);
         showError('Nie udało się utworzyć folderu');
     } finally {
         showLoading(false);
@@ -1331,7 +1490,7 @@ document.getElementById('newFolderForm').addEventListener('submit', async (e) =>
 
 // Format helpers
 function formatDuration(seconds) {
-    if (!seconds) return '0:00';
+    if (!seconds || seconds === 0) return '0:00';
     
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -1356,6 +1515,7 @@ function formatFileSize(bytes) {
 // Notepad functions
 function showNotepad() {
     document.getElementById('homeContent').style.display = 'none';
+    document.getElementById('videosSection').style.display = 'none';
     document.getElementById('notepadSection').style.display = 'block';
     document.getElementById('contentNav').style.display = 'block';
     
@@ -1381,7 +1541,7 @@ async function loadNotes() {
         }
         
     } catch (error) {
-        console.error('Error loading notes:', error);
+        consoleError('Error loading notes:', error);
     }
 }
 
@@ -1472,7 +1632,7 @@ async function createNewNote() {
         document.getElementById('noteTitle').focus();
         
     } catch (error) {
-        console.error('Error creating note:', error);
+        consoleError('Error creating note:', error);
         showError('Nie udało się utworzyć notatki');
     }
 }
@@ -1509,7 +1669,7 @@ async function saveNote() {
         }, 2000);
         
     } catch (error) {
-        console.error('Error saving note:', error);
+        consoleError('Error saving note:', error);
         showError('Nie udało się zapisać notatki');
     }
 }
@@ -1539,7 +1699,7 @@ async function deleteNote() {
         }
         
     } catch (error) {
-        console.error('Error deleting note:', error);
+        consoleError('Error deleting note:', error);
         showError('Nie udało się usunąć notatki');
     }
 }
@@ -1570,7 +1730,7 @@ async function toggleStar() {
         renderNotesList();
         
     } catch (error) {
-        console.error('Error updating star:', error);
+        consoleError('Error updating star:', error);
     }
 }
 
@@ -1826,7 +1986,7 @@ async function verifyPassword(password, hash) {
 
 // Check if returning user
 window.addEventListener('load', async () => {
-    console.log('Strona 0 - Inicjalizacja...');
+    consoleLog('Strona 0 - Inicjalizacja...');
     
     // Check for OAuth redirect first
     handleOAuthRedirect();
@@ -1845,7 +2005,15 @@ window.addEventListener('load', async () => {
         }
     }
     
-    console.log('Strona 0 - Gotowa!');
+    // Test Firebase Storage configuration
+    try {
+        const testRef = storage.ref('test.txt');
+        consoleLog('Firebase Storage configured correctly');
+    } catch (error) {
+        consoleError('Firebase Storage configuration error:', error);
+    }
+    
+    consoleLog('Strona 0 - Gotowa!');
 });
 
 // Prevent accidental navigation
@@ -1869,7 +2037,24 @@ favicon.href = 'data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAA
 document.head.appendChild(favicon);
 
 // Log successful initialization
-console.log('Strona 0 - Initialized successfully');
-console.log('Firebase Project:', firebaseConfig.projectId);
-console.log('Google Client ID:', GOOGLE_CLIENT_ID.substring(0, 20) + '...');
-console.log('Naciśnij Ctrl+Shift+Z aby wejść do aplikacji');
+consoleLog('Strona 0 - Initialized successfully');
+consoleLog('Firebase Project:', firebaseConfig.projectId);
+consoleLog('Google Client ID:', GOOGLE_CLIENT_ID.substring(0, 20) + '...');
+consoleLog('Naciśnij Ctrl+Shift+Z aby wejść do aplikacji');
+
+// Disable text selection in certain areas
+document.addEventListener('selectstart', function(e) {
+    if (e.target.closest('.sidebar, .modal-header, .browser-header, .editor-toolbar')) {
+        e.preventDefault();
+    }
+});
+
+// Additional security - disable print
+window.addEventListener('beforeprint', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+});
+
+// Make removeFromQueue globally available
+window.removeFromQueue = removeFromQueue;
