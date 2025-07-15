@@ -11,7 +11,6 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const storage = firebase.storage();
 
 // Google OAuth Configuration
 const GOOGLE_CLIENT_ID = '172651080134-hpk3392odvase3ro1ko6urgnec5r87nb.apps.googleusercontent.com';
@@ -25,11 +24,6 @@ let lockoutEndTime = null;
 let googleInitialized = false;
 let isAuthenticated = false;
 let navigationHistory = [];
-let currentFolder = null;
-let folders = [];
-let videos = [];
-let uploadQueue = [];
-let currentView = 'grid';
 
 // Initialize app function
 window.initializeApp = function() {
@@ -81,7 +75,6 @@ function goBack() {
 function backToHome() {
     // Hide all sections
     document.getElementById('notepadSection').style.display = 'none';
-    document.getElementById('videosSection').style.display = 'none';
     document.getElementById('homeContent').style.display = 'block';
     document.getElementById('contentNav').style.display = 'none';
     
@@ -256,7 +249,6 @@ async function handleGoogleSignIn(response) {
                         // Go directly to main panel
                         showScreen('mainPanel');
                         loadNotes();
-                        loadFolders();
                     } else {
                         // Show password entry
                         showScreen('passwordScreen');
@@ -558,7 +550,6 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
                 isAuthenticated = true;
                 showScreen('mainPanel');
                 loadNotes();
-                loadFolders();
             }
             
         } else {
@@ -680,7 +671,6 @@ document.getElementById('ruleForm').addEventListener('submit', async (e) => {
             isAuthenticated = true;
             showScreen('mainPanel');
             loadNotes();
-            loadFolders();
             
         } else {
             // Verify existing rule
@@ -693,7 +683,6 @@ document.getElementById('ruleForm').addEventListener('submit', async (e) => {
                 isAuthenticated = true;
                 showScreen('mainPanel');
                 loadNotes();
-                loadFolders();
             } else {
                 showError('Nieprawidłowa reguła', 'ruleError');
                 
@@ -721,8 +710,8 @@ document.querySelectorAll('.nav-item').forEach(item => {
         
         if (section === 'home') {
             backToHome();
-        } else if (section === 'notepad' || section === 'videos') {
-            // Both notepad and videos require PIN modal
+        } else if (section === 'notepad') {
+            // Notepad requires PIN modal
             document.getElementById('pinModal').classList.add('show');
             document.getElementById('accessCode').value = '';
             document.getElementById('accessCode').focus();
@@ -771,8 +760,6 @@ document.getElementById('accessForm').addEventListener('submit', async (e) => {
             const targetSection = document.getElementById('pinModal').dataset.targetSection;
             if (targetSection === 'notepad') {
                 showNotepad();
-            } else if (targetSection === 'videos') {
-                showVideosSection();
             }
         } else {
             showError('Nieprawidłowy kod dostępu', 'accessError');
@@ -786,741 +773,9 @@ document.getElementById('accessForm').addEventListener('submit', async (e) => {
     }
 });
 
-// Videos Section Functions
-function showVideosSection() {
-    document.getElementById('homeContent').style.display = 'none';
-    document.getElementById('notepadSection').style.display = 'none';
-    document.getElementById('videosSection').style.display = 'block';
-    document.getElementById('contentNav').style.display = 'block';
-    
-    // Update nav items
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    document.querySelector('[data-section="videos"]').classList.add('active');
-    
-    // Load videos if not loaded
-    loadVideos();
-}
-
-// Load folders - FIXED
-async function loadFolders() {
-    try {
-        console.log('Loading folders for user:', currentUser.id);
-        
-        const foldersSnapshot = await db.collection('users').doc(currentUser.id)
-            .collection('folders').get();
-        
-        folders = [];
-        foldersSnapshot.forEach(doc => {
-            folders.push({ id: doc.id, ...doc.data() });
-        });
-        
-        console.log('Loaded folders:', folders.length);
-        
-        // Sort folders by name
-        folders.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        
-        // Add default "All Videos" folder
-        folders.unshift({
-            id: 'all',
-            name: 'Wszystkie filmy',
-            videoCount: 0,
-            isDefault: true
-        });
-        
-        renderFoldersList();
-        
-        // Select first folder by default
-        if (!currentFolder && folders.length > 0) {
-            selectFolder(folders[0]);
-        }
-        
-    } catch (error) {
-        console.error('Error loading folders:', error);
-        // Create folders collection if it doesn't exist
-        folders = [{
-            id: 'all',
-            name: 'Wszystkie filmy',
-            videoCount: 0,
-            isDefault: true
-        }];
-        renderFoldersList();
-        selectFolder(folders[0]);
-    }
-}
-
-// Render folders list
-function renderFoldersList() {
-    const foldersList = document.getElementById('foldersList');
-    foldersList.innerHTML = '';
-    
-    folders.forEach(folder => {
-        const folderItem = document.createElement('div');
-        folderItem.className = 'folder-item';
-        if (currentFolder && currentFolder.id === folder.id) {
-            folderItem.classList.add('active');
-        }
-        
-        folderItem.innerHTML = `
-            <i class="fas fa-folder${folder.isDefault ? '' : '-open'} folder-icon"></i>
-            <div class="folder-info">
-                <div class="folder-name">${folder.name}</div>
-                <div class="folder-count">${folder.videoCount || 0} ${folder.videoCount === 1 ? 'film' : 'filmów'}</div>
-            </div>
-        `;
-        
-        folderItem.addEventListener('click', () => selectFolder(folder));
-        foldersList.appendChild(folderItem);
-    });
-}
-
-// Select folder
-function selectFolder(folder) {
-    currentFolder = folder;
-    renderFoldersList();
-    
-    document.getElementById('folderTitle').textContent = folder.name;
-    document.getElementById('currentPath').textContent = `/ ${folder.name}`;
-    
-    loadVideos(folder.id === 'all' ? null : folder.id);
-}
-
-// Load videos - FIXED
-async function loadVideos(folderId = null) {
-    try {
-        showLoading(true);
-        console.log('Loading videos for folder:', folderId);
-        
-        let query = db.collection('users').doc(currentUser.id).collection('videos');
-        
-        if (folderId) {
-            query = query.where('folderId', '==', folderId);
-        }
-        
-        const videosSnapshot = await query.get();
-        
-        videos = [];
-        videosSnapshot.forEach(doc => {
-            videos.push({ id: doc.id, ...doc.data() });
-        });
-        
-        console.log('Loaded videos:', videos.length);
-        
-        // Sort by upload date locally
-        videos.sort((a, b) => {
-            const dateA = new Date(a.uploadedAt || 0);
-            const dateB = new Date(b.uploadedAt || 0);
-            return dateB - dateA;
-        });
-        
-        renderVideos();
-        updateFolderCounts();
-        
-    } catch (error) {
-        console.error('Error loading videos:', error);
-        videos = [];
-        renderVideos();
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Update folder video counts
-async function updateFolderCounts() {
-    const counts = {};
-    videos.forEach(video => {
-        const folderId = video.folderId || 'all';
-        counts[folderId] = (counts[folderId] || 0) + 1;
-    });
-    
-    folders.forEach(folder => {
-        if (folder.id === 'all') {
-            folder.videoCount = videos.length;
-        } else {
-            folder.videoCount = counts[folder.id] || 0;
-        }
-    });
-    
-    renderFoldersList();
-}
-
-// Render videos
-function renderVideos() {
-    const videosGrid = document.getElementById('videosGrid');
-    const emptyState = document.getElementById('emptyState');
-    
-    if (videos.length === 0) {
-        videosGrid.style.display = 'none';
-        emptyState.style.display = 'flex';
-        return;
-    }
-    
-    videosGrid.style.display = '';
-    emptyState.style.display = 'none';
-    
-    videosGrid.innerHTML = '';
-    videosGrid.className = currentView === 'list' ? 'videos-grid list-view' : 'videos-grid';
-    
-    videos.forEach(video => {
-        const videoCard = createVideoCard(video);
-        videosGrid.appendChild(videoCard);
-    });
-}
-
-// Create video card
-function createVideoCard(video) {
-    const card = document.createElement('div');
-    card.className = currentView === 'list' ? 'video-card list-item' : 'video-card';
-    
-    const duration = formatDuration(video.duration);
-    const uploadDate = new Date(video.uploadedAt).toLocaleDateString('pl-PL');
-    const fileSize = formatFileSize(video.size);
-    
-    card.innerHTML = `
-        <div class="video-thumbnail">
-            <img src="${video.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgdmlld0JveD0iMCAwIDQwMCAyMjUiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjI1IiBmaWxsPSIjMjUyNTI1Ii8+CjxwYXRoIGQ9Ik0xNzUgMTUwVjc1TDI1MCAxMTIuNUwxNzUgMTUwWiIgZmlsbD0iIzY2NjY2NiIvPgo8L3N2Zz4='}" alt="${video.title}">
-            <span class="video-duration">${duration}</span>
-        </div>
-        <div class="video-info">
-            <div class="video-title">${video.title}</div>
-            <div class="video-meta">
-                <span>${fileSize}</span>
-                <span>${uploadDate}</span>
-            </div>
-        </div>
-    `;
-    
-    card.addEventListener('click', () => playVideo(video));
-    return card;
-}
-
-// Play video
-function playVideo(video) {
-    const modal = document.getElementById('videoPlayerModal');
-    const player = document.getElementById('videoPlayer');
-    
-    document.getElementById('videoPlayerTitle').textContent = video.title;
-    document.getElementById('videoSize').textContent = formatFileSize(video.size);
-    document.getElementById('videoDuration').textContent = formatDuration(video.duration);
-    document.getElementById('videoDate').textContent = new Date(video.uploadedAt).toLocaleString('pl-PL');
-    
-    player.src = video.url;
-    modal.classList.add('show');
-    
-    // Play video
-    player.play().catch(err => console.error('Error playing video:', err));
-}
-
-// Close video player
-function closeVideoPlayer() {
-    const modal = document.getElementById('videoPlayerModal');
-    const player = document.getElementById('videoPlayer');
-    
-    player.pause();
-    player.src = '';
-    modal.classList.remove('show');
-}
-
-// View controls
-document.querySelectorAll('.view-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentView = btn.dataset.view;
-        renderVideos();
-    });
-});
-
-// Upload Modal Functions
-function showUploadModal() {
-    document.getElementById('uploadModal').classList.add('show');
-    uploadQueue = [];
-    renderUploadQueue();
-}
-
-function closeUploadModal() {
-    document.getElementById('uploadModal').classList.remove('show');
-    document.getElementById('videoFileInput').value = '';
-    uploadQueue = [];
-    renderUploadQueue();
-}
-
-// File input handling - ENHANCED FOR MORE FORMATS
-document.getElementById('videoFileInput').addEventListener('change', (e) => {
-    handleFileSelect(e.target.files);
-});
-
-// Drag and drop
-const dropzone = document.getElementById('uploadDropzone');
-
-dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('drag-over');
-});
-
-dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('drag-over');
-});
-
-dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('drag-over');
-    handleFileSelect(e.dataTransfer.files);
-});
-
-// Handle file selection - ENHANCED
-function handleFileSelect(files) {
-    // Supported video formats
-    const supportedFormats = [
-        'video/mp4',
-        'video/webm',
-        'video/ogg',
-        'video/quicktime', // MOV
-        'video/x-msvideo', // AVI
-        'video/x-matroska', // MKV
-        'video/x-flv', // FLV
-        'video/3gpp', // 3GP
-        'video/mpeg', // MPEG
-        'video/x-ms-wmv' // WMV
-    ];
-    
-    const videoFiles = Array.from(files).filter(file => {
-        // Check by MIME type
-        let isVideo = supportedFormats.some(format => file.type.startsWith(format));
-        
-        // Also check by extension if MIME type is not recognized
-        if (!isVideo) {
-            const ext = file.name.split('.').pop().toLowerCase();
-            const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'flv', '3gp', 'mpeg', 'mpg', 'wmv', 'm4v'];
-            isVideo = videoExtensions.includes(ext);
-        }
-        
-        // Size limit check (5GB)
-        return isVideo && file.size <= 5 * 1024 * 1024 * 1024;
-    });
-    
-    if (videoFiles.length === 0) {
-        showError('Wybierz pliki wideo (MP4, WebM, MOV, AVI, MKV, FLV, 3GP, MPEG, WMV - maks. 5GB)');
-        return;
-    }
-    
-    videoFiles.forEach(file => {
-        if (!uploadQueue.find(f => f.name === file.name)) {
-            uploadQueue.push(file);
-        }
-    });
-    
-    renderUploadQueue();
-}
-
-// Render upload queue
-function renderUploadQueue() {
-    const queueContainer = document.getElementById('uploadQueue');
-    const queueList = document.getElementById('uploadQueueList');
-    const startBtn = document.getElementById('startUploadBtn');
-    
-    if (uploadQueue.length === 0) {
-        queueContainer.style.display = 'none';
-        startBtn.disabled = true;
-        return;
-    }
-    
-    queueContainer.style.display = 'block';
-    startBtn.disabled = false;
-    
-    queueList.innerHTML = '';
-    
-    uploadQueue.forEach((file, index) => {
-        const item = document.createElement('div');
-        item.className = 'upload-queue-item';
-        
-        item.innerHTML = `
-            <div class="file-icon">
-                <i class="fas fa-film"></i>
-            </div>
-            <div class="file-info">
-                <div class="file-name">${file.name}</div>
-                <div class="file-size">${formatFileSize(file.size)}</div>
-            </div>
-            <button class="remove-file" onclick="removeFromQueue(${index})">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        
-        queueList.appendChild(item);
-    });
-}
-
-// Remove from queue
-function removeFromQueue(index) {
-    uploadQueue.splice(index, 1);
-    renderUploadQueue();
-}
-
-// Start upload
-async function startUpload() {
-    if (uploadQueue.length === 0) return;
-    
-    closeUploadModal();
-    
-    for (let i = 0; i < uploadQueue.length; i++) {
-        const file = uploadQueue[i];
-        await uploadVideo(file);
-    }
-    
-    // Reload videos
-    loadVideos(currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null);
-}
-
-// Upload video - COMPLETELY REWRITTEN
-async function uploadVideo(file) {
-    const uploadOverlay = document.getElementById('uploadOverlay');
-    const progressFill = document.getElementById('uploadProgressFill');
-    const uploadStatus = document.getElementById('uploadStatus');
-    const uploadSpeed = document.getElementById('uploadSpeed');
-    const uploadTimeLeft = document.getElementById('uploadTimeLeft');
-    
-    uploadOverlay.classList.add('show');
-    document.getElementById('uploadFileName').textContent = file.name;
-    
-    try {
-        console.log('Starting upload for:', file.name);
-        
-        // Create unique file name
-        const timestamp = Date.now();
-        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileName = `${currentUser.id}/${timestamp}_${sanitizedFileName}`;
-        
-        console.log('Storage path:', fileName);
-        
-        // Create storage reference
-        const storageRef = firebase.storage().ref(`videos/${fileName}`);
-        
-        // Create upload task
-        const uploadTask = storageRef.put(file, {
-            contentType: file.type || 'video/mp4',
-            customMetadata: {
-                'uploadedBy': currentUser.email,
-                'originalName': file.name,
-                'uploadTime': new Date().toISOString()
-            }
-        });
-        
-        let startTime = Date.now();
-        let lastBytes = 0;
-        
-        // Handle upload with promise
-        await new Promise((resolve, reject) => {
-            uploadTask.on('state_changed', 
-                (snapshot) => {
-                    // Progress update
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    progressFill.style.width = progress + '%';
-                    uploadStatus.textContent = Math.round(progress) + '%';
-                    
-                    // Calculate speed
-                    const currentTime = Date.now();
-                    const elapsedSeconds = (currentTime - startTime) / 1000 || 1;
-                    const bytesTransferred = snapshot.bytesTransferred - lastBytes;
-                    const bytesPerSecond = bytesTransferred / elapsedSeconds;
-                    const mbPerSecond = (bytesPerSecond / (1024 * 1024)).toFixed(1);
-                    uploadSpeed.textContent = mbPerSecond + ' MB/s';
-                    
-                    // Calculate time remaining
-                    if (bytesPerSecond > 0) {
-                        const bytesRemaining = snapshot.totalBytes - snapshot.bytesTransferred;
-                        const secondsRemaining = Math.ceil(bytesRemaining / bytesPerSecond);
-                        const minutesRemaining = Math.ceil(secondsRemaining / 60);
-                        
-                        if (minutesRemaining > 1) {
-                            uploadTimeLeft.textContent = `${minutesRemaining} min`;
-                        } else {
-                            uploadTimeLeft.textContent = `${secondsRemaining} sek`;
-                        }
-                    }
-                    
-                    lastBytes = snapshot.bytesTransferred;
-                    startTime = currentTime;
-                    
-                    console.log(`Upload progress: ${Math.round(progress)}%`);
-                },
-                (error) => {
-                    // Handle errors
-                    console.error('Upload error:', error);
-                    uploadOverlay.classList.remove('show');
-                    
-                    let errorMessage = 'Błąd przesyłania: ';
-                    switch (error.code) {
-                        case 'storage/unauthorized':
-                            errorMessage += 'Brak uprawnień. Sprawdź reguły Storage w Firebase Console.';
-                            break;
-                        case 'storage/canceled':
-                            errorMessage += 'Przesyłanie anulowane';
-                            break;
-                        case 'storage/unknown':
-                            errorMessage += 'Nieznany błąd. Sprawdź połączenie internetowe.';
-                            break;
-                        default:
-                            errorMessage += error.message || 'Nieznany błąd';
-                    }
-                    
-                    showError(errorMessage);
-                    reject(error);
-                },
-                async () => {
-                    // Upload completed successfully
-                    try {
-                        console.log('Upload completed, getting download URL...');
-                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-                        console.log('Download URL obtained:', downloadURL.substring(0, 50) + '...');
-                        
-                        // Get video metadata
-                        const duration = await getVideoDuration(file);
-                        const thumbnail = await generateVideoThumbnail(file);
-                        
-                        // Prepare video data
-                        const videoData = {
-                            title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-                            fileName: file.name,
-                            storagePath: `videos/${fileName}`,
-                            size: file.size,
-                            type: file.type || 'video/mp4',
-                            url: downloadURL,
-                            thumbnail: thumbnail,
-                            duration: duration || 0,
-                            folderId: currentFolder && currentFolder.id !== 'all' ? currentFolder.id : null,
-                            uploadedAt: new Date().toISOString(),
-                            uploadedBy: currentUser.email,
-                            ...SecurityHelper.addSecurityFields({})
-                        };
-                        
-                        console.log('Saving video data to Firestore...');
-                        
-                        // Save to Firestore
-                        const docRef = await db.collection('users').doc(currentUser.id)
-                            .collection('videos').add(videoData);
-                        
-                        console.log('Video saved with ID:', docRef.id);
-                        
-                        uploadOverlay.classList.remove('show');
-                        resolve();
-                        
-                    } catch (saveError) {
-                        console.error('Error saving video data:', saveError);
-                        uploadOverlay.classList.remove('show');
-                        
-                        // Delete uploaded file if database save fails
-                        try {
-                            await storageRef.delete();
-                        } catch (deleteError) {
-                            console.error('Error deleting file after failed save:', deleteError);
-                        }
-                        
-                        showError('Film został przesłany, ale wystąpił błąd zapisu do bazy danych.');
-                        reject(saveError);
-                    }
-                }
-            );
-        });
-        
-        console.log('Upload process completed successfully');
-        
-    } catch (error) {
-        console.error('Upload initialization error:', error);
-        uploadOverlay.classList.remove('show');
-        showError('Nie można rozpocząć przesyłania. Sprawdź połączenie internetowe.');
-        throw error;
-    }
-}
-
-// Get video duration - IMPROVED
-async function getVideoDuration(file) {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        
-        video.onloadedmetadata = function() {
-            window.URL.revokeObjectURL(video.src);
-            const duration = video.duration;
-            console.log('Video duration:', duration);
-            resolve(duration);
-        };
-        
-        video.onerror = function() {
-            console.error('Error loading video metadata');
-            resolve(0);
-        };
-        
-        video.src = URL.createObjectURL(file);
-        
-        // Timeout after 30 seconds
-        setTimeout(() => {
-            window.URL.revokeObjectURL(video.src);
-            resolve(0);
-        }, 30000);
-    });
-}
-
-// Generate video thumbnail - IMPROVED
-async function generateVideoThumbnail(file) {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        let seeked = false;
-        
-        video.addEventListener('loadedmetadata', () => {
-            // Seek to 10% of video duration for better thumbnail
-            video.currentTime = video.duration * 0.1;
-        });
-        
-        video.addEventListener('seeked', () => {
-            if (seeked) return;
-            seeked = true;
-            
-            // Set canvas size
-            canvas.width = 400;
-            canvas.height = 225; // 16:9 aspect ratio
-            
-            // Draw video frame to canvas
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Convert to data URL
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        window.URL.revokeObjectURL(video.src);
-                        console.log('Thumbnail generated successfully');
-                        resolve(reader.result);
-                    };
-                    reader.readAsDataURL(blob);
-                } else {
-                    window.URL.revokeObjectURL(video.src);
-                    console.log('Failed to generate thumbnail');
-                    resolve(null);
-                }
-            }, 'image/jpeg', 0.7);
-        });
-        
-        video.addEventListener('error', () => {
-            window.URL.revokeObjectURL(video.src);
-            console.error('Error loading video for thumbnail');
-            resolve(null);
-        });
-        
-        video.src = URL.createObjectURL(file);
-        
-        // Timeout fallback after 20 seconds
-        setTimeout(() => {
-            if (!seeked) {
-                window.URL.revokeObjectURL(video.src);
-                console.log('Thumbnail generation timeout');
-                resolve(null);
-            }
-        }, 20000);
-    });
-}
-
-// Create new folder - FIXED
-function createNewFolder() {
-    document.getElementById('newFolderModal').classList.add('show');
-    document.getElementById('folderNameInput').value = '';
-    document.getElementById('folderNameInput').focus();
-}
-
-function closeNewFolderModal() {
-    document.getElementById('newFolderModal').classList.remove('show');
-}
-
-// New folder form - FIXED
-document.getElementById('newFolderForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const folderName = document.getElementById('folderNameInput').value.trim();
-    
-    if (!folderName) {
-        showError('Wprowadź nazwę folderu');
-        return;
-    }
-    
-    showLoading(true);
-    
-    try {
-        console.log('Creating new folder:', folderName);
-        
-        const folderData = {
-            name: folderName,
-            createdAt: new Date().toISOString(),
-            videoCount: 0,
-            ...SecurityHelper.addSecurityFields({})
-        };
-        
-        const docRef = await db.collection('users').doc(currentUser.id)
-            .collection('folders').add(folderData);
-        
-        console.log('Folder created with ID:', docRef.id);
-        
-        // Add to local folders array
-        folders.push({
-            id: docRef.id,
-            ...folderData
-        });
-        
-        // Sort folders
-        folders.sort((a, b) => {
-            if (a.isDefault) return -1;
-            if (b.isDefault) return 1;
-            return (a.name || '').localeCompare(b.name || '');
-        });
-        
-        closeNewFolderModal();
-        renderFoldersList();
-        
-        // Select the new folder
-        const newFolder = folders.find(f => f.id === docRef.id);
-        if (newFolder) {
-            selectFolder(newFolder);
-        }
-        
-        showError('Folder utworzony pomyślnie!');
-        
-    } catch (error) {
-        console.error('Error creating folder:', error);
-        showError('Nie udało się utworzyć folderu. Sprawdź połączenie internetowe.');
-    } finally {
-        showLoading(false);
-    }
-});
-
-// Format helpers
-function formatDuration(seconds) {
-    if (!seconds || seconds === 0) return '0:00';
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    
-    if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-}
-
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 B';
-    
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
 // Notepad functions
 function showNotepad() {
     document.getElementById('homeContent').style.display = 'none';
-    document.getElementById('videosSection').style.display = 'none';
     document.getElementById('notepadSection').style.display = 'block';
     document.getElementById('contentNav').style.display = 'block';
     
@@ -1868,8 +1123,6 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
         currentUser = null;
         currentNote = null;
         notes = [];
-        videos = [];
-        folders = [];
         isAuthenticated = false;
         sessionStorage.clear();
         
@@ -2026,14 +1279,6 @@ window.addEventListener('load', async () => {
         }
     }
     
-    // Test Storage
-    try {
-        const testRef = storage.ref('test.txt');
-        console.log('Firebase Storage configured correctly');
-    } catch (error) {
-        console.error('Firebase Storage configuration error:', error);
-    }
-    
     console.log('Strona 0 - Gotowa!');
 });
 
@@ -2064,13 +1309,12 @@ console.log('Google Client ID:', GOOGLE_CLIENT_ID.substring(0, 20) + '...');
 
 // Disable text selection in certain areas
 document.addEventListener('selectstart', function(e) {
-    if (e.target.closest('.sidebar, .modal-header, .browser-header, .editor-toolbar')) {
+    if (e.target.closest('.sidebar, .modal-header, .editor-toolbar')) {
         e.preventDefault();
     }
 });
 
 // Make functions globally available
-window.removeFromQueue = removeFromQueue;
 window.goBack = goBack;
 window.backToHome = backToHome;
 window.createNewNote = createNewNote;
@@ -2081,41 +1325,8 @@ window.formatText = formatText;
 window.insertList = insertList;
 window.changeColor = changeColor;
 window.insertLink = insertLink;
-window.showUploadModal = showUploadModal;
-window.closeUploadModal = closeUploadModal;
-window.startUpload = startUpload;
-window.closeVideoPlayer = closeVideoPlayer;
-window.createNewFolder = createNewFolder;
-window.closeNewFolderModal = closeNewFolderModal;
 window.closePinModal = closePinModal;
 window.useOAuthRedirect = useOAuthRedirect;
-
-// Additional storage rules info
-console.log(`
-==================================================
-WAŻNE: Upewnij się że Firebase Storage Rules są ustawione:
-
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-
-LUB dla testów:
-
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if true;
-    }
-  }
-}
-==================================================
-`);
 
 // Final initialization message
 console.log('Strona 0 - All functions loaded');
